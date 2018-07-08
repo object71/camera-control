@@ -5,13 +5,9 @@
  */
 package com.github.object71.cameracontrol;
 
-import java.awt.BorderLayout;
-import java.awt.Image;
 import java.util.List;
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
+import org.bytedeco.javacpp.Loader;
+import org.bytedeco.javacpp.opencv_java;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
@@ -19,25 +15,22 @@ import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.videoio.VideoCapture;
-import org.opencv.utils.Converters;
+
 /**
  *
  * @author hristo
  */
 public class Program {
-    
-    private static JFrame frame = new JFrame();
-    private static JPanel mainPanel = new JPanel(new BorderLayout());
-    JLabel lblimage = new JLabel(new ImageIcon());
-    
+
     public static void main(String... args) {
-        System.out.println("Done");
+        Loader.load(opencv_java.class);
+        run();
     }
-    
+
     public static void detectAndDisplay(Mat frame, CascadeClassifier faceCascade, CascadeClassifier eyesCascade) {
         Mat frameGray = new Mat();
         Imgproc.cvtColor(frame, frameGray, Imgproc.COLOR_BGR2GRAY);
@@ -62,12 +55,13 @@ public class Program {
             }
         }
         //-- Show what you got
-        //HighGui.imshow("Capture - Face detection", frame );
+        HighGui.imshow("Capture - Face detection", frame);
     }
-    public static void run(String[] args) {
-        String filenameFaceCascade = args.length > 2 ? args[0] : "../../data/haarcascades/haarcascade_frontalface_alt.xml";
-        String filenameEyesCascade = args.length > 2 ? args[1] : "../../data/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
-        int cameraDevice = args.length > 2 ? Integer.parseInt(args[2]) : 0;
+
+    public static void run() {
+        String filenameFaceCascade = "E:\\OpenCV\\opencv\\sources\\data\\haarcascades\\haarcascade_frontalface_alt.xml";
+        String filenameEyesCascade = "E:\\OpenCV\\opencv\\sources\\data\\haarcascades\\haarcascade_eye_tree_eyeglasses.xml";
+        int cameraDevice = 0;
         CascadeClassifier faceCascade = new CascadeClassifier();
         CascadeClassifier eyesCascade = new CascadeClassifier();
         if (!faceCascade.load(filenameFaceCascade)) {
@@ -79,7 +73,7 @@ public class Program {
             System.exit(0);
         }
         VideoCapture capture = new VideoCapture(cameraDevice);
-        if (!capture.isOpened()) {
+        while (!capture.isOpened()) {
             System.err.println("--(!)Error opening video capture");
             System.exit(0);
         }
@@ -91,6 +85,10 @@ public class Program {
             }
             //-- 3. Apply the classifier to the frame
             detectAndDisplay(frame, faceCascade, eyesCascade);
+
+            if (HighGui.waitKey(10) == 27) {
+                break;// escape
+            }
         }
         System.exit(0);
     }
