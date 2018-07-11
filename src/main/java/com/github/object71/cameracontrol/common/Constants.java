@@ -27,6 +27,6 @@ public class Constants {
     public static final double weightDivisor = 1.0;
     public static final double gradientTreshold = 50.0;
     
-    public static final boolean enablePostProcessing = true;
+    public static final boolean enablePostProcessing = false;
     public static final double postProcessingTreshold = 0.97;
 }

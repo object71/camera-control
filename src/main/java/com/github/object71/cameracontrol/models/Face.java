@@ -42,7 +42,7 @@ public class Face {
     public Face() {
         this.faceCascade = new CascadeClassifier();
         this.faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
-        
+
         eyeCascade = new CascadeClassifier();
         eyeCascade.load("./src/main/resources/haarcascade_eye_tree_eyeglasses.xml");
 
@@ -74,9 +74,9 @@ public class Face {
         }
         double maxDistance = 0;
         Rect[] arrayFaces = faces.toArray();
-        if(arrayFaces.length == 0) {
+        if (arrayFaces.length == 0) {
             return;
-        } 
+        }
         for (int i = 0; i < arrayFaces.length; i++) {
             Rect face = arrayFaces[i];
             Point faceCenter = Helpers.centerOfRect(face);
@@ -95,7 +95,7 @@ public class Face {
 
         Mat faceSubframe = grayFrame.submat(this.faceLocation);
 
-        if(Constants.smoothFaceImage) {
+        if (Constants.smoothFaceImage) {
             double sigma = Constants.smoothFaceFactor * faceSubframe.width();
             Imgproc.GaussianBlur(faceSubframe, faceSubframe, new Size(), sigma);
         }
@@ -104,8 +104,28 @@ public class Face {
         double eyeRegionHeight = faceSubframe.height() * Constants.eyeMultiplierHeight;
         double eyeRegionTop = faceSubframe.height() * Constants.eyeMultiplierTop;
 
-        Rect leftEyeRegion = new Rect((int)(faceSubframe.width() * Constants.eyeMultiplierLeft), (int)eyeRegionTop, (int)eyeRegionWidth, (int)eyeRegionHeight);
-        Rect rightEyeRegion = new Rect((int)(faceSubframe.width() - eyeRegionWidth - (faceSubframe.width() * Constants.eyeMultiplierLeft)), (int)eyeRegionTop, (int)eyeRegionWidth, (int)eyeRegionHeight);
-        
+        Rect leftEyeRegion = new Rect((int) (faceSubframe.width() * Constants.eyeMultiplierLeft), (int) eyeRegionTop,
+                (int) eyeRegionWidth, (int) eyeRegionHeight);
+        Rect rightEyeRegion = new Rect(
+                (int) (faceSubframe.width() - eyeRegionWidth - (faceSubframe.width() * Constants.eyeMultiplierLeft)),
+                (int) eyeRegionTop, (int) eyeRegionWidth, (int) eyeRegionHeight);
+
+        Imgproc.rectangle(debugFrame, new Point(leftEyeRegion.x, leftEyeRegion.y),
+                new Point(leftEyeRegion.x + leftEyeRegion.width, leftEyeRegion.y + leftEyeRegion.height),
+                new Scalar(255, 255, 255, 255));
+        Imgproc.rectangle(debugFrame, new Point(rightEyeRegion.x, rightEyeRegion.y),
+                new Point(rightEyeRegion.x + rightEyeRegion.width, rightEyeRegion.y + rightEyeRegion.height),
+                new Scalar(255, 255, 255, 255));
+
+        Point leftEyeCenter = leftEye.getEyeCenter(faceSubframe, leftEyeRegion);
+        Point rightEyeCenter = rightEye.getEyeCenter(faceSubframe, rightEyeRegion);
+
+        leftEyeCenter.x += faceLocation.x;
+        leftEyeCenter.y += faceLocation.y;
+        rightEyeCenter.x += faceLocation.x;
+        rightEyeCenter.y += faceLocation.y;
+
+        Imgproc.circle(debugFrame, leftEyeCenter, 3, new Scalar(255, 0, 0, 255));
+        Imgproc.circle(debugFrame, rightEyeCenter, 3, new Scalar(255, 0, 0, 255));
     }
 }
