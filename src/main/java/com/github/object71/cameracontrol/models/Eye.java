@@ -5,6 +5,10 @@
  */
 package com.github.object71.cameracontrol.models;
 
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.Timer;
+
 import com.github.object71.cameracontrol.common.Constants;
 import com.github.object71.cameracontrol.common.Helpers;
 
@@ -13,8 +17,11 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.core.TickMeter;
 import org.opencv.core.Core.MinMaxLocResult;
+import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
 
 /**
@@ -84,29 +91,58 @@ public class Eye {
         sum.convertTo(out, CvType.CV_32F, 1.0 / numGradients);
 
         MinMaxLocResult result = Core.minMaxLoc(out, null);
-        
-        // if(kEnablePostProcess) {
-        //     Mat floodClone;
-        //     double floodThresh = maxVal * Constants.postProcessingTreshold;
-        //     threshold(out, floodClone, floodThresh, 0.0f, cv::THRESH_TOZERO);
-        //     if(kPlotVectorField) {
-        //       //plotVecField(gradientX, gradientY, floodClone);
-        //       imwrite("eyeFrame.png",eyeROIUnscaled);
-        //     }
-        //     cv::Mat mask = floodKillEdges(floodClone);
-        //     //imshow(debugWindow + " Mask",mask);
-        //     //imshow(debugWindow,out);
-        //     // redo max
-        //     cv::minMaxLoc(out, NULL,&maxVal,NULL,&maxP,mask);
-        // }
 
+        if(Constants.enablePostProcessing) {
+            Mat floodClone = new Mat(out.rows(), out.cols(), CvType.CV_32F);
+            double floodThresh = result.maxVal * Constants.postProcessingTreshold;
+            Imgproc.threshold(out, floodClone, floodThresh, 0.0, Imgproc.THRESH_TOZERO);
+            Mat mask = floodKillEdges(floodClone);
+
+            MinMaxLocResult endResult = Core.minMaxLoc(out,mask);
+
+            return unscalePoint(endResult.maxLoc, eyeRegion);
+        }
+        
         return unscalePoint(result.maxLoc, eyeRegion);
+    }
+
+    private static Mat floodKillEdges(Mat matrix) {
+        //rectangle(matrix, new Rect(0,0,matrix.cols(), matrix.rows()),255);
+        
+        Mat mask = new Mat(matrix.rows(), matrix.cols(), CvType.CV_8U, new Scalar(255, 255, 255, 255));
+        Queue<Point> todo = new LinkedList<Point>();
+        todo.add(new Point(0, 0));
+
+        while (todo.size() > 0) {
+          Point currentPoint = todo.peek();
+          todo.poll();
+          if (matrix.get((int)currentPoint.y, (int)currentPoint.x)[0] == 0.0) {
+            continue;
+          }
+          // add in every direction
+          Point nextPoint = new Point(currentPoint.x + 1, currentPoint.y); // right
+          if (floodShouldPushPoint(nextPoint, matrix)) todo.add(nextPoint);
+          nextPoint.x = currentPoint.x - 1; nextPoint.y = currentPoint.y; // left
+          if (floodShouldPushPoint(nextPoint, matrix)) todo.add(nextPoint);
+          nextPoint.x = currentPoint.x; nextPoint.y = currentPoint.y + 1; // down
+          if (floodShouldPushPoint(nextPoint, matrix)) todo.add(nextPoint);
+          nextPoint.x = currentPoint.x; nextPoint.y = currentPoint.y - 1; // up
+          if (floodShouldPushPoint(nextPoint, matrix)) todo.add(nextPoint);
+          // kill it
+          matrix.put((int)currentPoint.y, (int)currentPoint.x, 0.0);
+          mask.put((int)currentPoint.y, (int)currentPoint.x, 0.0);
+        }
+        return mask;
+      }
+
+    private static boolean floodShouldPushPoint(Point nextPoint, Mat matrix) {
+        return Helpers.isPointInMatrix(nextPoint, matrix.rows(), matrix.cols());
     }
 
     private static Point unscalePoint(Point point, Rect originalSize) {
         double ratio = Constants.fastEyeWidth / originalSize.width;
-        int x = (int)Math.round(point.x / ratio);
-        int y = (int)Math.round(point.y / ratio);
-        return new Point(x,y);
+        int x = (int) Math.round(point.x / ratio);
+        int y = (int) Math.round(point.y / ratio);
+        return new Point(x, y);
     }
 }

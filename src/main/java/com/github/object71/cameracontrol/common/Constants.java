@@ -12,11 +12,11 @@ import org.opencv.core.Rect;
  * @author hristo
  */
 public class Constants {
-    public static final boolean plotVectorField = false;
-    public static final double eyeMultiplierTop = 0.25;
-    public static final double eyeMultiplierLeft = 0.13;
-    public static final double eyeMultiplierWidth = 0.30;
-    public static final double eyeMultiplierHeight = 0.35;
+    //public static final boolean plotVectorField = false;
+    // public static final double eyeMultiplierTop = 0.25;
+    // public static final double eyeMultiplierLeft = 0.13;
+    // public static final double eyeMultiplierWidth = 0.30;
+    // public static final double eyeMultiplierHeight = 0.35;
     
     public static final boolean smoothFaceImage = false;
     public static final double smoothFaceFactor = 0.005;

@@ -12,6 +12,7 @@ import org.bytedeco.javacpp.opencv_java;
 import org.opencv.core.Mat;
 import org.opencv.highgui.HighGui;
 import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
 
 /**
  *
@@ -24,6 +25,9 @@ public class Program {
         int cameraDevice = 0;
         Face face = new Face();
         VideoCapture capture = new VideoCapture(cameraDevice);
+        capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
+        capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
+        
         if (!capture.isOpened()) {
             System.err.println("--(!)Error opening video capture");
             System.exit(0);
@@ -45,6 +49,4 @@ public class Program {
         }
         System.exit(0);
     }
-
-    
 }

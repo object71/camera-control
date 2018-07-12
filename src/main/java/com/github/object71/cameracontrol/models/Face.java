@@ -29,7 +29,8 @@ public class Face {
     private Eye leftEye;
     private Eye rightEye;
     private CascadeClassifier faceCascade;
-    private CascadeClassifier eyeCascade;
+    private CascadeClassifier rightEyeCascade;
+    private CascadeClassifier leftEyeCascade;
 
     protected Mat frame = null;
     protected Mat debugFrame = null;
@@ -43,8 +44,11 @@ public class Face {
         this.faceCascade = new CascadeClassifier();
         this.faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
 
-        eyeCascade = new CascadeClassifier();
-        eyeCascade.load("./src/main/resources/haarcascade_eye_tree_eyeglasses.xml");
+        leftEyeCascade = new CascadeClassifier();
+        leftEyeCascade.load("./src/main/resources/haarcascade_lefteye_2splits.xml");
+
+        rightEyeCascade = new CascadeClassifier();
+        rightEyeCascade.load("./src/main/resources/haarcascade_righteye_2splits.xml");
 
         this.leftEye = new Eye(this);
         this.rightEye = new Eye(this);
@@ -67,11 +71,12 @@ public class Face {
 
         try {
             faceCascade.detectMultiScale(grayFrame, faces, 1.1, 2,
-                    0 | Objdetect.CASCADE_SCALE_IMAGE | Objdetect.CASCADE_FIND_BIGGEST_OBJECT, new Size(150, 150),
+                    0 | Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(),
                     frame.size());
         } catch (Exception e) {
             return;
         }
+
         double maxDistance = 0;
         Rect[] arrayFaces = faces.toArray();
         if (arrayFaces.length == 0) {
@@ -100,32 +105,46 @@ public class Face {
             Imgproc.GaussianBlur(faceSubframe, faceSubframe, new Size(), sigma);
         }
 
-        double eyeRegionWidth = faceSubframe.width() * Constants.eyeMultiplierWidth;
-        double eyeRegionHeight = faceSubframe.height() * Constants.eyeMultiplierHeight;
-        double eyeRegionTop = faceSubframe.height() * Constants.eyeMultiplierTop;
+        MatOfRect leftEyeDetections = new MatOfRect();
+        leftEyeCascade.detectMultiScale(faceSubframe, leftEyeDetections, 1.1, 3,
+                0 | Objdetect.CASCADE_SCALE_IMAGE, new Size(),
+                new Size(100, 100));
 
-        Rect leftEyeRegion = new Rect((int) (faceSubframe.width() * Constants.eyeMultiplierLeft), (int) eyeRegionTop,
-                (int) eyeRegionWidth, (int) eyeRegionHeight);
-        Rect rightEyeRegion = new Rect(
-                (int) (faceSubframe.width() - eyeRegionWidth - (faceSubframe.width() * Constants.eyeMultiplierLeft)),
-                (int) eyeRegionTop, (int) eyeRegionWidth, (int) eyeRegionHeight);
+        MatOfRect rightEyeDetections = new MatOfRect();
+        rightEyeCascade.detectMultiScale(faceSubframe, rightEyeDetections, 1.1, 3,
+                0 | Objdetect.CASCADE_SCALE_IMAGE, new Size(),
+                new Size(100, 100));
+        
+        Rect[] detections = null;
+        
+        
+        detections = leftEyeDetections.toArray();
+        boolean leftEyeDetected = detections.length > 0;
+        if (leftEyeDetected) {
+            Rect leftEyeRegion = detections[0];
+            // Imgproc.rectangle(debugFrame, new Point(leftEyeRegion.x + faceLocation.x, leftEyeRegion.y + faceLocation.y),
+            //         new Point(leftEyeRegion.x + faceLocation.x + leftEyeRegion.width, leftEyeRegion.y + faceLocation.y + leftEyeRegion.height),
+            //         new Scalar(255, 255, 255, 255));
+            Point leftEyeCenter = leftEye.getEyeCenter(faceSubframe, leftEyeRegion);
 
-        Imgproc.rectangle(debugFrame, new Point(leftEyeRegion.x, leftEyeRegion.y),
-                new Point(leftEyeRegion.x + leftEyeRegion.width, leftEyeRegion.y + leftEyeRegion.height),
-                new Scalar(255, 255, 255, 255));
-        Imgproc.rectangle(debugFrame, new Point(rightEyeRegion.x, rightEyeRegion.y),
-                new Point(rightEyeRegion.x + rightEyeRegion.width, rightEyeRegion.y + rightEyeRegion.height),
-                new Scalar(255, 255, 255, 255));
+            leftEyeCenter.x += faceLocation.x + leftEyeRegion.x;
+            leftEyeCenter.y += faceLocation.y + leftEyeRegion.y;
+            Imgproc.circle(debugFrame, leftEyeCenter, 3, new Scalar(255, 0, 0, 255));
+        }
 
-        Point leftEyeCenter = leftEye.getEyeCenter(faceSubframe, leftEyeRegion);
-        Point rightEyeCenter = rightEye.getEyeCenter(faceSubframe, rightEyeRegion);
+        detections = rightEyeDetections.toArray();
+        boolean rightEyeDetected = detections.length > 0;        
+        if (rightEyeDetected) {
+            Rect rightEyeRegion = detections[0];
+            // Imgproc.rectangle(debugFrame,
+            //         new Point(rightEyeRegion.x + faceLocation.x, rightEyeRegion.y + faceLocation.y),
+            //         new Point(rightEyeRegion.x + faceLocation.x + rightEyeRegion.width, rightEyeRegion.y + faceLocation.y + rightEyeRegion.height),
+            //         new Scalar(255, 255, 255, 255));
+            Point rightEyeCenter = rightEye.getEyeCenter(faceSubframe, rightEyeRegion);
 
-        leftEyeCenter.x += faceLocation.x;
-        leftEyeCenter.y += faceLocation.y;
-        rightEyeCenter.x += faceLocation.x;
-        rightEyeCenter.y += faceLocation.y;
-
-        Imgproc.circle(debugFrame, leftEyeCenter, 3, new Scalar(255, 0, 0, 255));
-        Imgproc.circle(debugFrame, rightEyeCenter, 3, new Scalar(255, 0, 0, 255));
+            rightEyeCenter.x += faceLocation.x + rightEyeRegion.x;
+            rightEyeCenter.y += faceLocation.y + rightEyeRegion.y;
+            Imgproc.circle(debugFrame, rightEyeCenter, 3, new Scalar(255, 0, 0, 255));
+        }
     }
 }
