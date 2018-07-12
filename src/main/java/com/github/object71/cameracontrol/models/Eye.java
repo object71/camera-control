@@ -39,10 +39,11 @@ public class Eye {
         Mat eyeRegionSubframeUnscaled = faceSubframe.submat(eyeRegion);
         Size scaleTo = new Size(Constants.fastEyeWidth, Constants.fastEyeWidth);
                 //(Constants.fastEyeWidth / eyeRegionSubframeUnscaled.cols()) * eyeRegionSubframeUnscaled.rows());
-        Mat eyeRegionSubframe = new Mat((int)Math.round(scaleTo.width), (int)Math.round(scaleTo.height), CvType.CV_64F);
+        Mat eyeRegionSubframe = new Mat((int)Math.round(scaleTo.width), (int)Math.round(scaleTo.height), eyeRegionSubframeUnscaled.type());
 
         Imgproc.resize(eyeRegionSubframeUnscaled, eyeRegionSubframe, scaleTo);
-
+        HighGui.imshow("Debug", eyeRegionSubframe);
+        
         // y is calculated with the same func - matrix is rotated
         Mat gradientXMatrix = Helpers.computeMatXGradient(eyeRegionSubframe);
         Mat gradientYMatrix = Helpers.computeMatXGradient(eyeRegionSubframe.t()).t();

@@ -58,6 +58,8 @@ public class Face {
     public void initializeFrameInformation(Mat frame) {
         MatOfRect faces = new MatOfRect();
 
+        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_BGR2GRAY);
+
         if (this.frame == null) {
             this.frame = new Mat(frame.rows(), frame.cols(), frame.type());
             this.debugFrame = new Mat(frame.rows(), frame.cols(), frame.type());
@@ -65,12 +67,12 @@ public class Face {
         frame.copyTo(this.frame);
         frame.copyTo(this.debugFrame);
 
-        ArrayList<Mat> rgbChannels = new ArrayList<Mat>(3);
-        Core.split(frame, rgbChannels);
-        Mat grayFrame = rgbChannels.get(2);
+        // ArrayList<Mat> rgbChannels = new ArrayList<Mat>(3);
+        // Core.split(frame, rgbChannels);
+        // Mat grayFrame = rgbChannels.get(2);
 
         try {
-            faceCascade.detectMultiScale(grayFrame, faces, 1.1, 2,
+            faceCascade.detectMultiScale(frame, faces, 1.1, 2,
                     0 | Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(),
                     frame.size());
         } catch (Exception e) {
@@ -98,7 +100,7 @@ public class Face {
             }
         }
 
-        Mat faceSubframe = grayFrame.submat(this.faceLocation);
+        Mat faceSubframe = frame.submat(this.faceLocation);
 
         if (Constants.smoothFaceImage) {
             double sigma = Constants.smoothFaceFactor * faceSubframe.width();
@@ -122,9 +124,9 @@ public class Face {
         boolean leftEyeDetected = detections.length > 0;
         if (leftEyeDetected) {
             Rect leftEyeRegion = detections[0];
-            // Imgproc.rectangle(debugFrame, new Point(leftEyeRegion.x + faceLocation.x, leftEyeRegion.y + faceLocation.y),
-            //         new Point(leftEyeRegion.x + faceLocation.x + leftEyeRegion.width, leftEyeRegion.y + faceLocation.y + leftEyeRegion.height),
-            //         new Scalar(255, 255, 255, 255));
+            Imgproc.rectangle(debugFrame, new Point(leftEyeRegion.x + faceLocation.x, leftEyeRegion.y + faceLocation.y),
+                    new Point(leftEyeRegion.x + faceLocation.x + leftEyeRegion.width, leftEyeRegion.y + faceLocation.y + leftEyeRegion.height),
+                    new Scalar(255, 255, 255, 255));
             Point leftEyeCenter = leftEye.getEyeCenter(faceSubframe, leftEyeRegion);
 
             leftEyeCenter.x += faceLocation.x + leftEyeRegion.x;
@@ -136,10 +138,10 @@ public class Face {
         boolean rightEyeDetected = detections.length > 0;        
         if (rightEyeDetected) {
             Rect rightEyeRegion = detections[0];
-            // Imgproc.rectangle(debugFrame,
-            //         new Point(rightEyeRegion.x + faceLocation.x, rightEyeRegion.y + faceLocation.y),
-            //         new Point(rightEyeRegion.x + faceLocation.x + rightEyeRegion.width, rightEyeRegion.y + faceLocation.y + rightEyeRegion.height),
-            //         new Scalar(255, 255, 255, 255));
+            Imgproc.rectangle(debugFrame,
+                    new Point(rightEyeRegion.x + faceLocation.x, rightEyeRegion.y + faceLocation.y),
+                    new Point(rightEyeRegion.x + faceLocation.x + rightEyeRegion.width, rightEyeRegion.y + faceLocation.y + rightEyeRegion.height),
+                    new Scalar(255, 255, 255, 255));
             Point rightEyeCenter = rightEye.getEyeCenter(faceSubframe, rightEyeRegion);
 
             rightEyeCenter.x += faceLocation.x + rightEyeRegion.x;

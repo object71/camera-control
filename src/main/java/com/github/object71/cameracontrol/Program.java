@@ -25,8 +25,8 @@ public class Program {
         int cameraDevice = 0;
         Face face = new Face();
         VideoCapture capture = new VideoCapture(cameraDevice);
-        capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
-        capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
+        // capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
+        // capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
         
         if (!capture.isOpened()) {
             System.err.println("--(!)Error opening video capture");

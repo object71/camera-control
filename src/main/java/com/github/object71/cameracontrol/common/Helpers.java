@@ -84,6 +84,14 @@ public class Helpers {
         return output;
     }
 
+    public static void bright(Mat matrix) {
+        for(int y = 0; y < matrix.rows(); y++) {
+            for(int x = 0; x < matrix.cols(); x++) {
+                matrix.put(y, x, matrix.get(y, x)[0] + 50);
+            }
+        }
+    }
+
     public static void possibleCenterFormula(int x, int y, Mat weight, double gx, double gy, Mat output) {
 
         for (int cy = 0; cy < output.rows(); cy++) {
