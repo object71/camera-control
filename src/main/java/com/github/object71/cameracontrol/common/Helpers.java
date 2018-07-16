@@ -84,6 +84,27 @@ public class Helpers {
         return output;
     }
 
+    public static Mat computeMatYGradient(Mat input) throws IllegalArgumentException {
+        if (input.rows() < 3) {
+            throw new IllegalArgumentException("Invalid matrix size");
+        }
+        Mat output = new Mat(input.rows(), input.cols(), CvType.CV_64F);
+
+        for (int x = 0; x < input.rows(); x++) {
+            // Mat inputRow = input.row(y);
+
+            // set the border gradients
+            output.put(0, x, input.get(1, x)[0] - input.get(0, x)[0]);
+            output.put(output.rows() - 1, x, input.get(input.rows() - 1, x)[0] - input.get(input.cols() - 2, x)[0]);
+
+            for (int y = 1; y < input.cols() - 1; y++) {
+                output.put(y, x, input.get(y + 1, x)[0] - input.get(y - 1, x)[0]);
+            }
+        }
+
+        return output;
+    }
+
     public static void bright(Mat matrix) {
         for(int y = 0; y < matrix.rows(); y++) {
             for(int x = 0; x < matrix.cols(); x++) {

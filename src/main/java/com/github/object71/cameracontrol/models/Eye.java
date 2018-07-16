@@ -7,7 +7,6 @@ package com.github.object71.cameracontrol.models;
 
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Timer;
 
 import com.github.object71.cameracontrol.common.Constants;
 import com.github.object71.cameracontrol.common.Helpers;
@@ -15,11 +14,11 @@ import com.github.object71.cameracontrol.common.Helpers;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.core.TickMeter;
 import org.opencv.core.Core.MinMaxLocResult;
 import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
@@ -40,13 +39,12 @@ public class Eye {
         Size scaleTo = new Size(Constants.fastEyeWidth, Constants.fastEyeWidth);
                 //(Constants.fastEyeWidth / eyeRegionSubframeUnscaled.cols()) * eyeRegionSubframeUnscaled.rows());
         Mat eyeRegionSubframe = new Mat((int)Math.round(scaleTo.width), (int)Math.round(scaleTo.height), eyeRegionSubframeUnscaled.type());
-
         Imgproc.resize(eyeRegionSubframeUnscaled, eyeRegionSubframe, scaleTo);
         HighGui.imshow("Debug", eyeRegionSubframe);
         
         // y is calculated with the same func - matrix is rotated
         Mat gradientXMatrix = Helpers.computeMatXGradient(eyeRegionSubframe);
-        Mat gradientYMatrix = Helpers.computeMatXGradient(eyeRegionSubframe.t()).t();
+        Mat gradientYMatrix = Helpers.computeMatYGradient(eyeRegionSubframe);
         Mat magnitudeMatrix = Helpers.getMatrixMagnitude(gradientXMatrix, gradientYMatrix);
 
         double gradientTreshold = Helpers.computeDynamicTreshold(magnitudeMatrix, Constants.gradientTreshold);
