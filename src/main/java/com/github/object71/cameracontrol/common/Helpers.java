@@ -7,6 +7,7 @@ package com.github.object71.cameracontrol.common;
 
 import javax.xml.crypto.dsig.keyinfo.RetrievalMethod;
 
+import org.opencv.core.Rect2d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -65,12 +66,26 @@ public class Helpers {
         return new Point(rectangle.x + (rectangle.width / 2.0), rectangle.y + (rectangle.height / 2.0));
     }
 
+    public static Point centerOfRect(Rect2d rectangle) {
+        return new Point(rectangle.x + (rectangle.width / 2.0), rectangle.y + (rectangle.height / 2.0));
+    }
+
     public static double centerOfRectXAxis(Rect rectangle) {
         return rectangle.x + (rectangle.width / 2.0);
     }
 
     public static double distanceBetweenPoints(Point a, Point b) {
         return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    public static Point averageBetweenPoints(Point a, Point b) {
+        if (a == null) {
+            return b;
+        } else if (b == null) {
+            return b;
+        } else {
+            return new Point((a.x + b.x) / 2, (a.y + b.y) / 2);
+        }
     }
 
     public static double distanceBetweenValues(double a, double b) {
@@ -144,10 +159,14 @@ public class Helpers {
         return output;
     }
 
-    public static void bright(Mat matrix) {
+    public static void bright(Mat matrix, double brightenBy) {
         for (int y = 0; y < matrix.rows(); y++) {
             for (int x = 0; x < matrix.cols(); x++) {
-                matrix.put(y, x, matrix.get(y, x)[0] + 50);
+                double[] values = matrix.get(y, x);
+                for(int v = 0; v < values.length; v++) {
+                    values[v] += values[v] * brightenBy;
+                }
+                matrix.put(y, x, values);
             }
         }
     }
