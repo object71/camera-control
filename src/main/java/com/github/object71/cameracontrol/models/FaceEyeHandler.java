@@ -150,7 +150,7 @@ public class FaceEyeHandler {
 
         // y is calculated with the same func - matrix is rotated
         Mat gradientXMatrix = Helpers.computeMatXGradient(eyeRegionSubframe);
-        Mat gradientYMatrix = Helpers.computeMatXGradient(eyeRegionSubframe.t()).t();
+        Mat gradientYMatrix = Helpers.computeMatYGradient(eyeRegionSubframe);
         Mat magnitudeMatrix = Helpers.getMatrixMagnitude(gradientXMatrix, gradientYMatrix);
 
         double gradientTreshold = Helpers.computeDynamicTreshold(magnitudeMatrix, Constants.gradientTreshold);

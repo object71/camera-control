@@ -12,6 +12,7 @@ import org.bytedeco.javacpp.opencv_java;
 import org.opencv.core.Mat;
 import org.opencv.highgui.HighGui;
 import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
 
 /**
  *
