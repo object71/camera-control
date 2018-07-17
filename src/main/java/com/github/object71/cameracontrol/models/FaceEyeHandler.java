@@ -36,6 +36,9 @@ public class FaceEyeHandler {
     private CascadeClassifier rightEyeCascade;
     private CascadeClassifier leftEyeCascade;
 
+    public Point leftEye = null;
+    public Point rightEye = null;
+
     public FaceEyeHandler() {
         this.faceCascade = new CascadeClassifier();
         this.faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
@@ -49,12 +52,12 @@ public class FaceEyeHandler {
     }
 
     public void initializeFrameInformation(Mat inputFrame) {
-        Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64FC1);
+        Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64F);
 
         Imgproc.cvtColor(inputFrame, frame, Imgproc.COLOR_BGR2GRAY);
 
         Rect faceLocation = this.getFaceLocation(frame);
-        if(faceLocation == null) {
+        if (faceLocation == null) {
             return;
         }
         Mat faceSubframe = frame.submat(faceLocation);
@@ -84,6 +87,7 @@ public class FaceEyeHandler {
 
             leftEyeCenter.x += faceLocation.x + leftEyeRegion.x;
             leftEyeCenter.y += faceLocation.y + leftEyeRegion.y;
+            this.leftEye = leftEyeCenter;
         }
 
         detections = rightEyeDetections.toArray();
@@ -94,6 +98,7 @@ public class FaceEyeHandler {
 
             rightEyeCenter.x += faceLocation.x + rightEyeRegion.x;
             rightEyeCenter.y += faceLocation.y + rightEyeRegion.y;
+            this.rightEye = rightEyeCenter;
         }
     }
 
@@ -143,34 +148,37 @@ public class FaceEyeHandler {
     protected Point getEyeCenter(Mat faceSubframe, Rect eyeRegion) {
         Mat eyeRegionSubframeUnscaled = faceSubframe.submat(eyeRegion);
         Size scaleTo = new Size(Constants.fastEyeWidth, Constants.fastEyeWidth);
-        Mat eyeRegionSubframe = new Mat((int) Math.round(scaleTo.width), (int) Math.round(scaleTo.height),
-                eyeRegionSubframeUnscaled.type());
+        Mat eyeRegionSubframe = new Mat(scaleTo, eyeRegionSubframeUnscaled.type());
+        Imgproc.resize(eyeRegionSubframeUnscaled, eyeRegionSubframe, scaleTo); 
 
-        Imgproc.resize(eyeRegionSubframeUnscaled, eyeRegionSubframe, scaleTo);
+        int rows = eyeRegionSubframe.rows();
+        int cols = eyeRegionSubframe.cols();
+        double[] frameAsDoubles = Helpers.matrixToArray(eyeRegionSubframe);
 
-        // y is calculated with the same func - matrix is rotated
-        Mat gradientXMatrix = Helpers.computeMatXGradient(eyeRegionSubframe);
-        Mat gradientYMatrix = Helpers.computeMatYGradient(eyeRegionSubframe);
-        Mat magnitudeMatrix = Helpers.getMatrixMagnitude(gradientXMatrix, gradientYMatrix);
+        double[] gradientXMatrix = Helpers.computeMatXGradient(frameAsDoubles, rows, cols);
+        double[] gradientYMatrix = Helpers.computeMatYGradient(frameAsDoubles, rows, cols);
+        double[] magnitudeMatrix = Helpers.getMatrixMagnitude(gradientXMatrix, gradientYMatrix, rows, cols);
 
-        double gradientTreshold = Helpers.computeDynamicTreshold(magnitudeMatrix, Constants.gradientTreshold);
+        double gradientTreshold = Helpers.computeDynamicTreshold(magnitudeMatrix, Constants.gradientTreshold, rows,
+                cols);
 
         for (int y = 0; y < eyeRegionSubframe.rows(); y++) {
             for (int x = 0; x < eyeRegionSubframe.cols(); x++) {
-                double valueX = gradientXMatrix.get(y, x)[0];
-                double valueY = gradientYMatrix.get(y, x)[0];
-                double magnitude = magnitudeMatrix.get(y, x)[0];
+                int coordinate = (y * cols) + x;
+                double valueX = gradientXMatrix[coordinate];
+                double valueY = gradientYMatrix[coordinate];
+                double magnitude = magnitudeMatrix[coordinate];
                 if (magnitude > gradientTreshold) {
-                    gradientXMatrix.put(y, x, valueX / magnitude);
-                    gradientYMatrix.put(y, x, valueY / magnitude);
+                    gradientXMatrix[coordinate] = valueX / magnitude;
+                    gradientYMatrix[coordinate] = valueY / magnitude;
                 } else {
-                    gradientXMatrix.put(y, x, 0);
-                    gradientYMatrix.put(y, x, 0);
+                    gradientXMatrix[coordinate] = 0;
+                    gradientYMatrix[coordinate] = 0;
                 }
             }
         }
 
-        Mat weight = new Mat(eyeRegionSubframe.rows(), eyeRegionSubframe.cols(), CvType.CV_64F);
+        Mat weight = new Mat(rows, cols, CvType.CV_64F);
         Imgproc.GaussianBlur(eyeRegionSubframe, weight, new Size(Constants.weightBlurSize, Constants.weightBlurSize), 0,
                 0);
         for (int y = 0; y < weight.rows(); y++) {
@@ -179,11 +187,12 @@ public class FaceEyeHandler {
             }
         }
 
-        Mat sum = new Mat(eyeRegionSubframe.rows(), eyeRegionSubframe.cols(), CvType.CV_64F);
-        for (int y = 0; y < weight.rows(); y++) {
-            for (int x = 0; x < weight.cols(); x++) {
-                double valueX = gradientXMatrix.get(y, x)[0];
-                double valueY = gradientYMatrix.get(y, x)[0];
+        Mat sum = new Mat(rows, cols, CvType.CV_64F);
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                int coordinate = (y * cols) + x;
+                double valueX = gradientXMatrix[coordinate];
+                double valueY = gradientYMatrix[coordinate];
                 if (valueX == 0.0 && valueY == 0.0) {
                     continue;
                 }
@@ -192,14 +201,14 @@ public class FaceEyeHandler {
             }
         }
 
-        double numGradients = (weight.rows() * weight.cols());
-        Mat out = new Mat(sum.rows(), sum.cols(), CvType.CV_32F);
+        double numGradients = (rows * cols);
+        Mat out = new Mat(rows, cols, CvType.CV_32F);
         sum.convertTo(out, CvType.CV_32F, 1.0 / numGradients);
 
         MinMaxLocResult result = Core.minMaxLoc(out, null);
 
         if (Constants.enablePostProcessing) {
-            Mat floodClone = new Mat(out.rows(), out.cols(), CvType.CV_32F);
+            Mat floodClone = new Mat(rows, cols, CvType.CV_32F);
             double floodThresh = result.maxVal * Constants.postProcessingTreshold;
             Imgproc.threshold(out, floodClone, floodThresh, 0.0, Imgproc.THRESH_TOZERO);
             Mat mask = floodKillEdges(floodClone);

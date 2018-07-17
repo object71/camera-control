@@ -5,6 +5,8 @@
  */
 package com.github.object71.cameracontrol.common;
 
+import javax.xml.crypto.dsig.keyinfo.RetrievalMethod;
+
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -31,25 +33,29 @@ public class Helpers {
         return point.x >= 0 && point.x < cols && point.y >= 0 && point.y < rows;
     }
 
-    public static Mat getMatrixMagnitude(Mat matrixX, Mat matrixY) {
-        Mat magnitudeMatrix = new Mat(matrixX.rows(), matrixX.cols(), CvType.CV_64F);
-        for (int y = 0; y < matrixX.rows(); y++) {
-            for (int x = 0; x < matrixX.cols(); x++) {
-                double valueX = matrixX.get(y, x)[0];
-                double valueY = matrixY.get(y, x)[0];
-                double magnitudeValue = Math.sqrt(Math.pow(valueX, 2) + Math.pow(valueY, 2));
-                magnitudeMatrix.put(y, x, magnitudeValue);
+    public static double[] getMatrixMagnitude(double[] matrixX, double[] matrixY, int rows, int cols) {
+        double[] magnitudeMatrix = new double[rows * cols];
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                int coordinate = (y * cols) + x;
+                double valueX = matrixX[coordinate];
+                double valueY = matrixY[coordinate];
+                double magnitudeValue = Math.sqrt((valueX * valueX) + (valueY * valueY));
+                magnitudeMatrix[coordinate] = magnitudeValue;
             }
         }
         return magnitudeMatrix;
     }
 
-    public static double computeDynamicTreshold(Mat matrix, double standardDeviationFactor) {
+    public static double computeDynamicTreshold(double[] matrix, double standardDeviationFactor, int rows, int cols) {
+        Mat inputMatrix = new Mat(rows, cols, CvType.CV_64FC1);
+        inputMatrix.put(0, 0, matrix);
+
         MatOfDouble standartMagnitudeGradient = new MatOfDouble();
         MatOfDouble meanMagnitudeGradient = new MatOfDouble();
-        Core.meanStdDev(matrix, meanMagnitudeGradient, standartMagnitudeGradient);
+        Core.meanStdDev(inputMatrix, meanMagnitudeGradient, standartMagnitudeGradient);
 
-        double standartDeviation = standartMagnitudeGradient.toArray()[0] / Math.sqrt(matrix.rows() * matrix.cols());
+        double standartDeviation = standartMagnitudeGradient.toArray()[0] / Math.sqrt(rows * cols);
         double result = standartDeviation * standardDeviationFactor + meanMagnitudeGradient.toArray()[0];
 
         return result;
@@ -71,42 +77,67 @@ public class Helpers {
         return a >= b ? a - b : b - a;
     }
 
-    public static Mat computeMatXGradient(Mat input) throws IllegalArgumentException {
-        if (input.cols() < 3) {
+    public static double[] computeMatXGradient(double[] input, int rows, int cols) throws IllegalArgumentException {
+        if (cols < 3) {
             throw new IllegalArgumentException("Invalid matrix size");
         }
-        Mat output = new Mat(input.rows(), input.cols(), CvType.CV_64F);
+        double[] output = new double[rows * cols];
 
-        for (int y = 0; y < input.rows(); y++) {
-            // Mat inputRow = input.row(y);
+        for (int y = 0; y < rows; y++) {
 
             // set the border gradients
-            output.put(y, 0, input.get(y, 1)[0] - input.get(y, 0)[0]);
-            output.put(y, output.cols() - 1, input.get(y, input.cols() - 1)[0] - input.get(y, input.cols() - 2)[0]);
+            output[(y * cols) + (0)] = input[(y * cols) + (1)] - input[(y * cols) + (0)];
+            output[(y * cols) + (cols - 1)] = input[(y * cols) + (cols - 1)] - input[(y * cols) + (cols - 2)];
 
-            for (int x = 1; x < input.cols() - 1; x++) {
-                output.put(y, x, input.get(y, x + 1)[0] - input.get(y, x - 1)[0]);
+            for (int x = 1; x < cols - 1; x++) {
+                output[(y * cols) + (x)] = input[(y * cols) + (x + 1)] - input[(y * cols) + (x - 1)];
             }
         }
 
         return output;
     }
 
-    public static Mat computeMatYGradient(Mat input) throws IllegalArgumentException {
-        if (input.rows() < 3) {
+    public static double[] matrixToArray(Mat matrix) {
+        int rows = matrix.rows();
+        int cols = matrix.cols();
+        double[] result = new double[rows * cols];
+
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                result[y * cols + x] = matrix.get(y, x)[0];
+
+            }
+        }
+
+        return result;
+    }
+
+    public static Mat arrayToMatrix(double[] matrix, int rows, int cols) {
+        Mat result = new Mat(rows, cols, CvType.CV_64F);
+
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                result.put(y, x, matrix[y * cols + x]);
+            }
+        }
+
+        return result;
+    }
+
+    public static double[] computeMatYGradient(double[] input, int rows, int cols) throws IllegalArgumentException {
+        if (rows < 3) {
             throw new IllegalArgumentException("Invalid matrix size");
         }
-        Mat output = new Mat(input.rows(), input.cols(), CvType.CV_64F);
+        double[] output = new double[rows * cols];
 
-        for (int x = 0; x < input.rows(); x++) {
-            // Mat inputRow = input.row(y);
+        for (int x = 0; x < cols; x++) {
 
             // set the border gradients
-            output.put(0, x, input.get(1, x)[0] - input.get(0, x)[0]);
-            output.put(output.rows() - 1, x, input.get(input.rows() - 1, x)[0] - input.get(input.cols() - 2, x)[0]);
+            output[(0) + (x)] = input[(1 * cols) + (x)] - input[(0) + (x)];
+            output[((rows - 1) * cols) + (x)] = input[((rows - 1) * cols) + (x)] - input[((rows - 2) * cols) + (x)];
 
-            for (int y = 1; y < input.cols() - 1; y++) {
-                output.put(y, x, input.get(y + 1, x)[0] - input.get(y - 1, x)[0]);
+            for (int y = 1; y < rows - 1; y++) {
+                output[(y * cols) + (x)] = input[((y + 1) * cols) + (x)] - input[((y - 1) * cols) + (x)];
             }
         }
 
@@ -114,8 +145,8 @@ public class Helpers {
     }
 
     public static void bright(Mat matrix) {
-        for(int y = 0; y < matrix.rows(); y++) {
-            for(int x = 0; x < matrix.cols(); x++) {
+        for (int y = 0; y < matrix.rows(); y++) {
+            for (int x = 0; x < matrix.cols(); x++) {
                 matrix.put(y, x, matrix.get(y, x)[0] + 50);
             }
         }
