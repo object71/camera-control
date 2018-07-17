@@ -5,7 +5,7 @@
  */
 package com.github.object71.cameracontrol;
 
-import com.github.object71.cameracontrol.models.Face;
+import com.github.object71.cameracontrol.models.FaceEyeHandler;
 
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.opencv_java;
@@ -23,10 +23,10 @@ public class Program {
     public static void main(String... args) {
         Loader.load(opencv_java.class);
         int cameraDevice = 0;
-        Face face = new Face();
+        FaceEyeHandler face = new FaceEyeHandler();
         VideoCapture capture = new VideoCapture(cameraDevice);
-        // capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
-        // capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
+        capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
+        capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
         
         if (!capture.isOpened()) {
             System.err.println("--(!)Error opening video capture");
@@ -41,7 +41,7 @@ public class Program {
             }
             
             face.initializeFrameInformation(frame);
-            HighGui.imshow("Debug", face.getDebugFrame());
+            HighGui.imshow("Debug", frame);
             
             if (HighGui.waitKey(10) == 27) {
                 break;// escape

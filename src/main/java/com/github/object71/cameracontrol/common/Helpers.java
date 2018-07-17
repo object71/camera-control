@@ -59,8 +59,16 @@ public class Helpers {
         return new Point(rectangle.x + (rectangle.width / 2.0), rectangle.y + (rectangle.height / 2.0));
     }
 
+    public static double centerOfRectXAxis(Rect rectangle) {
+        return rectangle.x + (rectangle.width / 2.0);
+    }
+
     public static double distanceBetweenPoints(Point a, Point b) {
         return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    public static double distanceBetweenValues(double a, double b) {
+        return a >= b ? a - b : b - a;
     }
 
     public static Mat computeMatXGradient(Mat input) throws IllegalArgumentException {
