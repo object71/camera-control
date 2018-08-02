@@ -5,31 +5,26 @@
  */
 package com.github.object71.cameracontrol.models;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
 
 import com.github.object71.cameracontrol.common.Constants;
+import com.github.object71.cameracontrol.common.GradientsModel;
 import com.github.object71.cameracontrol.common.Helpers;
+import com.github.object71.cameracontrol.common.PointHistoryCollection;
 
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfDouble;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
-import org.opencv.core.Rect2d;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.core.Core.MinMaxLocResult;
 import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.objdetect.Objdetect;
-import org.opencv.tracking.Tracker;
-import org.opencv.tracking.TrackerBoosting;
-import org.opencv.tracking.TrackerKCF;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.tracking.TrackerTLD;
 
 /**
  *
@@ -37,15 +32,12 @@ import org.opencv.tracking.TrackerTLD;
  */
 public class FaceEyeHandler {
 
-    private CascadeClassifier faceCascade;
-    private CascadeClassifier rightEyeCascade;
-    private CascadeClassifier leftEyeCascade;
-    private Tracker leftEyeTracker = null;
-    private Tracker rightEyeTracker = null;
-    private long lastUpdate = System.currentTimeMillis();
+    private final CascadeClassifier faceCascade;
+    private final CascadeClassifier rightEyeCascade;
+    private final CascadeClassifier leftEyeCascade;
 
-    public Point leftEye = null;
-    public Point rightEye = null;
+    public PointHistoryCollection leftEye = new PointHistoryCollection(3);
+    public PointHistoryCollection rightEye = new PointHistoryCollection(3);
 
     public FaceEyeHandler() {
         this.faceCascade = new CascadeClassifier();
@@ -56,50 +48,20 @@ public class FaceEyeHandler {
 
         rightEyeCascade = new CascadeClassifier();
         rightEyeCascade.load("./src/main/resources/haarcascade_righteye_2splits.xml");
-
-        this.leftEyeTracker = TrackerTLD.create();
-        this.rightEyeTracker = TrackerTLD.create();
-
     }
 
     public void initializeFrameInformation(Mat inputFrame) {
-        boolean tracking = true;
-        if ((System.currentTimeMillis() - lastUpdate > 80) || leftEye == null || rightEye == null) {
-            tracking = false;
-            this.lastUpdate = System.currentTimeMillis();
-        }
-        Helpers.bright(inputFrame, 0.35);
+        Helpers.bright(inputFrame, 25);
 
         Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64F);
 
-        boolean leftTracked = tracking;
-        boolean rightTracked = tracking;
-
         Imgproc.cvtColor(inputFrame, frame, Imgproc.COLOR_BGR2GRAY);
-
-        if (tracking) {
-            int size = frame.cols() / 100;
-            Rect2d leftEyeLocation = new Rect2d(this.leftEye.x - size, this.leftEye.y - size, size * 2, size * 2);
-            Rect2d rightEyeLocation = new Rect2d(this.rightEye.x - size, this.rightEye.y - size, size * 2, size * 2);
-
-            leftTracked = this.leftEyeTracker.update(frame, leftEyeLocation);
-            rightTracked = this.rightEyeTracker.update(frame, rightEyeLocation);
-
-            if (leftTracked) {
-                this.leftEye = Helpers.averageBetweenPoints(Helpers.centerOfRect(leftEyeLocation), this.leftEye);
-            }
-            if (rightTracked) {
-                this.rightEye = Helpers.averageBetweenPoints(Helpers.centerOfRect(rightEyeLocation), this.rightEye);
-            }
-            if (leftTracked && rightTracked) {
-                return;
-            }
-        }
 
         Rect faceLocation = this.getFaceLocation(frame);
         if (faceLocation == null) {
             return;
         }
+
         Mat faceSubframe = frame.submat(faceLocation);
 
         if (Constants.smoothFaceImage) {
@@ -107,39 +69,43 @@ public class FaceEyeHandler {
             Imgproc.GaussianBlur(faceSubframe, faceSubframe, new Size(), sigma);
         }
 
-        if (!leftTracked) {
-            Rect[] detections = null;
-            double faceLeftSide = faceLocation.x + faceLocation.width;
-            MatOfRect leftEyeDetections = new MatOfRect();
-            leftEyeCascade.detectMultiScale(faceSubframe, leftEyeDetections, 1.1, 3, 0 | Objdetect.CASCADE_SCALE_IMAGE,
-                    new Size(), new Size(100, 100));
-            detections = leftEyeDetections.toArray();
-            boolean leftEyeDetected = detections.length > 0;
-            if (leftEyeDetected) {
-                Rect leftEyeRegion = getEyeLocation(detections, faceLeftSide);
+        Rect[] detectionsLeft;
+        double faceLeftSide = 0;
+        MatOfRect leftEyeDetections = new MatOfRect();
+
+        leftEyeCascade.detectMultiScale(faceSubframe, leftEyeDetections, 1.05, 0, Objdetect.CASCADE_DO_CANNY_PRUNING,
+                new Size(), new Size(faceSubframe.width(), faceSubframe.height()));
+        detectionsLeft = leftEyeDetections.toArray();
+
+        Rect[] detectionsRight;
+        double faceRightSide = faceSubframe.width();
+        MatOfRect rightEyeDetections = new MatOfRect();
+
+        rightEyeCascade.detectMultiScale(faceSubframe, rightEyeDetections, 1.05, 0, Objdetect.CASCADE_DO_CANNY_PRUNING, 
+                new Size(), new Size(faceSubframe.width(), faceSubframe.height()));
+        detectionsRight = rightEyeDetections.toArray();
+
+        if (detectionsLeft.length > 0) {
+            Rect leftEyeRegion = getEyeLocation(detectionsLeft, faceLeftSide, faceRightSide);
+            if (leftEyeRegion != null) {
                 Point leftEyeCenter = getEyeCenter(faceSubframe, leftEyeRegion);
+                
 
                 leftEyeCenter.x += faceLocation.x + leftEyeRegion.x;
                 leftEyeCenter.y += faceLocation.y + leftEyeRegion.y;
-                this.leftEye = leftEyeCenter;
+                this.leftEye.insertNewPoint(leftEyeCenter);
             }
         }
 
-        if (!rightTracked) {
-            Rect[] detections = null;
-            double faceRightSide = faceLocation.x;
-            MatOfRect rightEyeDetections = new MatOfRect();
-            rightEyeCascade.detectMultiScale(faceSubframe, rightEyeDetections, 1.1, 3,
-                    0 | Objdetect.CASCADE_SCALE_IMAGE, new Size(), new Size(100, 100));
-            detections = rightEyeDetections.toArray();
-            boolean rightEyeDetected = detections.length > 0;
-            if (rightEyeDetected) {
-                Rect rightEyeRegion = getEyeLocation(detections, faceRightSide);
+        if (detectionsRight.length > 0) {
+            Rect rightEyeRegion = getEyeLocation(detectionsRight, faceRightSide, faceLeftSide);
+
+            if (rightEyeRegion != null) {
                 Point rightEyeCenter = getEyeCenter(faceSubframe, rightEyeRegion);
 
                 rightEyeCenter.x += faceLocation.x + rightEyeRegion.x;
                 rightEyeCenter.y += faceLocation.y + rightEyeRegion.y;
-                this.rightEye = rightEyeCenter;
+                this.rightEye.insertNewPoint(rightEyeCenter);
             }
         }
     }
@@ -148,7 +114,7 @@ public class FaceEyeHandler {
         MatOfRect faces = new MatOfRect();
 
         faceCascade.detectMultiScale(frame, faces, 1.1, 2,
-                0 | Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(), frame.size());
+                Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_FIND_BIGGEST_OBJECT, new Size(frame.size().width / 25, frame.size().height / 25), frame.size());
 
         double maxDistance = 0;
         Rect[] arrayFaces = faces.toArray();
@@ -156,8 +122,7 @@ public class FaceEyeHandler {
         if (arrayFaces.length == 0) {
             return null;
         }
-        for (int i = 0; i < arrayFaces.length; i++) {
-            Rect face = arrayFaces[i];
+        for (Rect face : arrayFaces) {
             Point faceCenter = Helpers.centerOfRect(face);
             Point imageCenter = Helpers.centerOfRect(new Rect(0, 0, frame.width(), frame.height()));
             double distance = Helpers.distanceBetweenPoints(faceCenter, imageCenter);
@@ -170,16 +135,17 @@ public class FaceEyeHandler {
         return faceLocation;
     }
 
-    private Rect getEyeLocation(Rect[] detections, double faceSide) {
+    private Rect getEyeLocation(Rect[] detections, double faceDesiredSide, double faceUndesiredSide) {
         Rect rightEyeRegion = null;
         double minEyeToSideDistance = Double.MAX_VALUE;
 
-        for (int i = 0; i < detections.length; i++) {
-            Rect eyeRegion = detections[i];
+        for (Rect eyeRegion : detections) {
             double eyeRegionX = Helpers.centerOfRectXAxis(eyeRegion);
-            double distance = Helpers.distanceBetweenValues(eyeRegionX, faceSide);
-            if (distance < minEyeToSideDistance) {
-                minEyeToSideDistance = distance;
+            double distanceToDesired = Helpers.distanceBetweenValues(eyeRegionX, faceDesiredSide);
+            double distanceToUndesired = Helpers.distanceBetweenValues(eyeRegionX, faceUndesiredSide);
+
+            if (distanceToDesired < minEyeToSideDistance && distanceToDesired < distanceToUndesired) {
+                minEyeToSideDistance = distanceToDesired;
                 rightEyeRegion = eyeRegion;
             }
         }
@@ -188,65 +154,66 @@ public class FaceEyeHandler {
     }
 
     protected Point getEyeCenter(Mat faceSubframe, Rect eyeRegion) {
-        // Mat eyeRegionSubframeUnscaled = faceSubframe.submat(eyeRegion);
-        // Size scaleTo = new Size(Constants.fastEyeWidth, Constants.fastEyeWidth);
-        // Mat eyeRegionSubframe = new Mat(scaleTo, eyeRegionSubframeUnscaled.type());
-        // Imgproc.resize(eyeRegionSubframeUnscaled, eyeRegionSubframe, scaleTo);
         Mat eyeRegionSubframe = faceSubframe.submat(eyeRegion);
-
+        
         int rows = eyeRegionSubframe.rows();
         int cols = eyeRegionSubframe.cols();
         double[] frameAsDoubles = Helpers.matrixToArray(eyeRegionSubframe);
 
-        double[] gradientXMatrix = Helpers.computeMatXGradient(frameAsDoubles, rows, cols);
-        double[] gradientYMatrix = Helpers.computeMatYGradient(frameAsDoubles, rows, cols);
-        double[] magnitudeMatrix = Helpers.getMatrixMagnitude(gradientXMatrix, gradientYMatrix, rows, cols);
-
-        double gradientTreshold = Helpers.computeDynamicTreshold(magnitudeMatrix, Constants.gradientTreshold, rows,
-                cols);
-
-        for (int y = 0; y < eyeRegionSubframe.rows(); y++) {
-            for (int x = 0; x < eyeRegionSubframe.cols(); x++) {
-                int coordinate = (y * cols) + x;
-                double valueX = gradientXMatrix[coordinate];
-                double valueY = gradientYMatrix[coordinate];
-                double magnitude = magnitudeMatrix[coordinate];
-                if (magnitude > gradientTreshold) {
-                    gradientXMatrix[coordinate] = valueX / magnitude;
-                    gradientYMatrix[coordinate] = valueY / magnitude;
-                } else {
-                    gradientXMatrix[coordinate] = 0;
-                    gradientYMatrix[coordinate] = 0;
-                }
-            }
-        }
+        GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
 
         Mat weight = new Mat(rows, cols, CvType.CV_64F);
         Imgproc.GaussianBlur(eyeRegionSubframe, weight, new Size(Constants.weightBlurSize, Constants.weightBlurSize), 0,
                 0);
+
+        double[] sum = new double[rows * cols];
+        double[] weightArray = Helpers.matrixToArray(weight);
+        
         for (int y = 0; y < weight.rows(); y++) {
             for (int x = 0; x < weight.cols(); x++) {
-                weight.put(y, x, 255 - weight.get(y, x)[0]);
-            }
-        }
-
-        Mat sum = new Mat(rows, cols, CvType.CV_64F);
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
                 int coordinate = (y * cols) + x;
-                double valueX = gradientXMatrix[coordinate];
-                double valueY = gradientYMatrix[coordinate];
+
+                double valueX = gradients.gradientX[coordinate];
+                double valueY = gradients.gradientY[coordinate];
                 if (valueX == 0.0 && valueY == 0.0) {
                     continue;
                 }
 
-                Helpers.possibleCenterFormula(x, y, weight, valueX, valueY, sum);
+                for (int cy = 0; cy < rows; cy++) {
+                    for (int cx = 0; cx < cols; cx++) {
+                        int coordinateC = (cy * cols) + cx;
+                        //check all other than the current value
+                        if (x == cx && y == cy) {
+                            continue;
+                        }
+
+                        double dx = x - cx; // the distance to a certain point
+                        double dy = y - cy; // the distance to a certain point
+                        double magnitude = Math.sqrt((dx * dx) + (dy * dy)); // actual vector distance
+
+                        dx = dx / magnitude;
+                        dy = dy / magnitude;
+
+                        // 0 or positive
+                        double dotProduct = Math.max(0, dx * valueX + dy * valueY);
+
+                        double currentValue = sum[coordinateC];
+
+                        if (Constants.enableWeight) {
+                            double weightValue = 255 - weightArray[coordinate];
+                            sum[coordinateC] = currentValue + (Math.pow(dotProduct, 2) * (weightValue / Constants.weightDivisor));
+                        } else {
+                            sum[coordinateC] = currentValue + Math.pow(dotProduct, 2);
+                        }
+                    }
+                }
             }
         }
 
-        double numGradients = (rows * cols);
-        Mat out = new Mat(rows, cols, CvType.CV_32F);
-        sum.convertTo(out, CvType.CV_32F, 1.0 / numGradients);
+        //double numGradients = (rows * cols);
+        //Mat out = new Mat(rows, cols, CvType.CV_32F);
+        //Helpers.arrayToMatrix(sum, rows, cols).convertTo(out, CvType.CV_32F, 1.0 / numGradients);
+        Mat out = Helpers.arrayToMatrix(sum, rows, cols, CvType.CV_32F);
 
         MinMaxLocResult result = Core.minMaxLoc(out, null);
 
@@ -259,10 +226,8 @@ public class FaceEyeHandler {
             MinMaxLocResult endResult = Core.minMaxLoc(out, mask);
 
             return endResult.maxLoc;
-            // return unscalePoint(endResult.maxLoc, eyeRegion);
         }
 
-        // return unscalePoint(result.maxLoc, eyeRegion);
         return result.maxLoc;
     }
 
@@ -270,7 +235,7 @@ public class FaceEyeHandler {
         // rectangle(matrix, new Rect(0,0,matrix.cols(), matrix.rows()),255);
 
         Mat mask = new Mat(matrix.rows(), matrix.cols(), CvType.CV_8U, new Scalar(255, 255, 255, 255));
-        Queue<Point> todo = new LinkedList<Point>();
+        Queue<Point> todo = new LinkedList<>();
         todo.add(new Point(0, 0));
 
         while (todo.size() > 0) {

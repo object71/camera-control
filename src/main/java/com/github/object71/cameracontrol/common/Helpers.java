@@ -5,8 +5,6 @@
  */
 package com.github.object71.cameracontrol.common;
 
-import javax.xml.crypto.dsig.keyinfo.RetrievalMethod;
-
 import org.opencv.core.Rect2d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -32,20 +30,6 @@ public class Helpers {
 
     public static boolean isPointInMatrix(Point point, int rows, int cols) {
         return point.x >= 0 && point.x < cols && point.y >= 0 && point.y < rows;
-    }
-
-    public static double[] getMatrixMagnitude(double[] matrixX, double[] matrixY, int rows, int cols) {
-        double[] magnitudeMatrix = new double[rows * cols];
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
-                int coordinate = (y * cols) + x;
-                double valueX = matrixX[coordinate];
-                double valueY = matrixY[coordinate];
-                double magnitudeValue = Math.sqrt((valueX * valueX) + (valueY * valueY));
-                magnitudeMatrix[coordinate] = magnitudeValue;
-            }
-        }
-        return magnitudeMatrix;
     }
 
     public static double computeDynamicTreshold(double[] matrix, double standardDeviationFactor, int rows, int cols) {
@@ -92,24 +76,72 @@ public class Helpers {
         return a >= b ? a - b : b - a;
     }
 
-    public static double[] computeMatXGradient(double[] input, int rows, int cols) throws IllegalArgumentException {
+    public static GradientsModel computeGradient(double[] input, int rows, int cols) throws IllegalArgumentException {
         if (cols < 3) {
             throw new IllegalArgumentException("Invalid matrix size");
         }
-        double[] output = new double[rows * cols];
+        double[] gradientX = new double[rows * cols];
+        double[] gradientY = new double[rows * cols];
+        double[] magnitude = new double[rows * cols];
+        double xA, xB, yA, yB, valueX, valueY;
 
         for (int y = 0; y < rows; y++) {
+            for (int x = 1; x < cols; x++) {
+                int coordinate = (y * cols) + x;
 
-            // set the border gradients
-            output[(y * cols) + (0)] = input[(y * cols) + (1)] - input[(y * cols) + (0)];
-            output[(y * cols) + (cols - 1)] = input[(y * cols) + (cols - 1)] - input[(y * cols) + (cols - 2)];
+                xA = x == cols - 1 ? input[coordinate] : input[coordinate + 1];
+                xB = x == 0 ? input[coordinate] : input[coordinate - 1];
+                gradientX[coordinate] = valueX = xA - xB;
 
-            for (int x = 1; x < cols - 1; x++) {
-                output[(y * cols) + (x)] = input[(y * cols) + (x + 1)] - input[(y * cols) + (x - 1)];
+                yA = y == rows - 1 ? input[coordinate] : input[coordinate + cols];
+                yB = y == 0 ? input[(y) + (x)] : input[coordinate - cols];
+                gradientY[coordinate] = valueY = yA - yB;
+
+                magnitude[coordinate] = Math.sqrt((valueX * valueX) + (valueY * valueY));
             }
         }
 
-        return output;
+        double gradientTreshold = Helpers.computeDynamicTreshold(magnitude, Constants.gradientTreshold, rows,
+                cols);
+
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                int coordinate = (y * cols) + x;
+                valueX = gradientX[coordinate];
+                valueY = gradientY[coordinate];
+                double magnitudeValue = magnitude[coordinate];
+                if (magnitudeValue > gradientTreshold) {
+                    gradientX[coordinate] = valueX / magnitudeValue;
+                    gradientY[coordinate] = valueY / magnitudeValue;
+                } else {
+                    gradientX[coordinate] = 0;
+                    gradientY[coordinate] = 0;
+                }
+            }
+        }
+        GradientsModel gradients = new GradientsModel();
+        gradients.gradientX = gradientX;
+        gradients.gradientY = gradientY;
+        gradients.magnitude = magnitude;
+        gradients.gradientTreshold = gradientTreshold;
+        gradients.cols = cols;
+        gradients.rows = rows;
+        
+        return gradients;
+    }
+
+    public static double[] getMatrixMagnitude(double[] matrixX, double[] matrixY, int rows, int cols) {
+        double[] magnitudeMatrix = new double[rows * cols];
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                int coordinate = (y * cols) + x;
+                double valueX = matrixX[coordinate];
+                double valueY = matrixY[coordinate];
+                double magnitudeValue = Math.sqrt((valueX * valueX) + (valueY * valueY));
+                magnitudeMatrix[coordinate] = magnitudeValue;
+            }
+        }
+        return magnitudeMatrix;
     }
 
     public static double[] matrixToArray(Mat matrix) {
@@ -125,10 +157,14 @@ public class Helpers {
         }
 
         return result;
+    }    
+    
+    public static Mat arrayToMatrix(double[] matrix, int rows, int cols) {
+        return arrayToMatrix(matrix, rows, cols, CvType.CV_64F);
     }
 
-    public static Mat arrayToMatrix(double[] matrix, int rows, int cols) {
-        Mat result = new Mat(rows, cols, CvType.CV_64F);
+    public static Mat arrayToMatrix(double[] matrix, int rows, int cols, int type) {
+        Mat result = new Mat(rows, cols, type);
 
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < cols; x++) {
@@ -139,32 +175,13 @@ public class Helpers {
         return result;
     }
 
-    public static double[] computeMatYGradient(double[] input, int rows, int cols) throws IllegalArgumentException {
-        if (rows < 3) {
-            throw new IllegalArgumentException("Invalid matrix size");
-        }
-        double[] output = new double[rows * cols];
-
-        for (int x = 0; x < cols; x++) {
-
-            // set the border gradients
-            output[(0) + (x)] = input[(1 * cols) + (x)] - input[(0) + (x)];
-            output[((rows - 1) * cols) + (x)] = input[((rows - 1) * cols) + (x)] - input[((rows - 2) * cols) + (x)];
-
-            for (int y = 1; y < rows - 1; y++) {
-                output[(y * cols) + (x)] = input[((y + 1) * cols) + (x)] - input[((y - 1) * cols) + (x)];
-            }
-        }
-
-        return output;
-    }
-
     public static void bright(Mat matrix, double brightenBy) {
         for (int y = 0; y < matrix.rows(); y++) {
             for (int x = 0; x < matrix.cols(); x++) {
                 double[] values = matrix.get(y, x);
-                for(int v = 0; v < values.length; v++) {
-                    values[v] += values[v] * brightenBy;
+                for (int v = 0; v < values.length; v++) {
+                    double value = values[v] + brightenBy;
+                    values[v] = value > 255 ? 255 : value;
                 }
                 matrix.put(y, x, values);
             }
