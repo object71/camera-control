@@ -9,7 +9,6 @@ import com.github.object71.cameracontrol.models.FaceEyeHandler;
 
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.opencv_java;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
 import org.opencv.highgui.HighGui;
