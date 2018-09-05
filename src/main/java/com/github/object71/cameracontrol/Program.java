@@ -5,7 +5,7 @@
  */
 package com.github.object71.cameracontrol;
 
-import com.github.object71.cameracontrol.models.FaceEyeHandler;
+import com.github.object71.cameracontrol.models.FaceHandler;
 
 import org.apache.commons.lang.time.StopWatch;
 import org.bytedeco.javacpp.Loader;
@@ -15,7 +15,6 @@ import org.opencv.core.Scalar;
 import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
-import org.opencv.videoio.Videoio;
 
 /**
  *
@@ -30,10 +29,8 @@ public class Program {
     	
         Loader.load(opencv_java.class);
         int cameraDevice = 0;
-        FaceEyeHandler face = new FaceEyeHandler();
+        FaceHandler face = new FaceHandler();
         VideoCapture capture = new VideoCapture(cameraDevice);
-        //capture.set(Videoio.CAP_PROP_FRAME_WIDTH, 320);
-        //capture.set(Videoio.CAP_PROP_FRAME_HEIGHT, 240);
         
         if (!capture.isOpened()) {
             System.err.println("--(!)Error opening video capture");
@@ -53,6 +50,12 @@ public class Program {
             }
             if(face.rightEye.getAveragePoint() != null) {
                 Imgproc.circle(frame, face.rightEye.getAveragePoint(), 1, new Scalar(255, 255, 255, 255));
+            }
+            if(face.mouth.getAveragePoint() != null) {
+                Imgproc.circle(frame, face.mouth.getAveragePoint(), 1, new Scalar(255, 255, 255, 255));
+            }
+            if(face.nose.getAveragePoint() != null) {
+                Imgproc.circle(frame, face.nose.getAveragePoint(), 1, new Scalar(255, 255, 255, 255));
             }
 
             HighGui.imshow("Debug", frame);
