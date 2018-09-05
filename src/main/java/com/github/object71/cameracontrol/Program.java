@@ -7,6 +7,7 @@ package com.github.object71.cameracontrol;
 
 import com.github.object71.cameracontrol.models.FaceEyeHandler;
 
+import org.apache.commons.lang.time.StopWatch;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.opencv_java;
 import org.opencv.core.Mat;
@@ -21,8 +22,12 @@ import org.opencv.videoio.Videoio;
  * @author hristo
  */
 public class Program {
+	
+	private static StopWatch stopwatch = new StopWatch();
 
     public static void main(String... args) {
+    
+    	
         Loader.load(opencv_java.class);
         int cameraDevice = 0;
         FaceEyeHandler face = new FaceEyeHandler();
