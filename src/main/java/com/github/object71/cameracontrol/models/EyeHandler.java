@@ -19,8 +19,7 @@ import com.github.object71.cameracontrol.common.Helpers;
 
 public class EyeHandler {
 	
-	public static Point getEyeCenter(Mat faceSubframe, Rect eyeRegion) {
-        Mat eyeRegionSubframe = faceSubframe.submat(eyeRegion);
+	public static Point getEyeCenter(Mat eyeRegionSubframe) {
         
         int rows = eyeRegionSubframe.rows();
         int cols = eyeRegionSubframe.cols();

@@ -6,6 +6,7 @@
 package com.github.object71.cameracontrol.common;
 
 import org.opencv.core.Rect2d;
+import org.bytedeco.javacpp.Pointer;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -22,6 +23,15 @@ public class Helpers {
     public static boolean isRectangleInMatrix(Rect rectangle, Mat matrix) {
         return rectangle.x > 0 && rectangle.y > 0 && rectangle.x + rectangle.width < matrix.cols()
                 && rectangle.y + rectangle.height < matrix.rows();
+    }
+    
+    public static Pointer getPointer(long nativeAddress) {
+    	Pointer pointer = new Pointer() {
+			{
+				address = nativeAddress;
+			}
+		};
+		return pointer;
     }
 
     public static boolean isPointInMatrix(Point point, Mat matrix) {
@@ -62,7 +72,7 @@ public class Helpers {
         return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
     }
 
-    public static Point averageBetweenPoints(Point a, Point b) {
+    public static Point centerOfPoints(Point a, Point b) {
         if (a == null) {
             return b;
         } else if (b == null) {

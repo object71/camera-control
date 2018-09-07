@@ -5,28 +5,21 @@
  */
 package com.github.object71.cameracontrol.models;
 
-import java.util.LinkedList;
-import java.util.Queue;
-
-import com.github.object71.cameracontrol.common.Constants;
-import com.github.object71.cameracontrol.common.GradientsModel;
 import com.github.object71.cameracontrol.common.Helpers;
+import com.github.object71.cameracontrol.common.MarkPoint;
 import com.github.object71.cameracontrol.common.PointHistoryCollection;
 
 import org.opencv.core.Mat;
-import org.opencv.core.Core;
+import org.bytedeco.javacpp.Pointer;
+import org.bytedeco.javacpp.flandmark;
+import org.bytedeco.javacpp.flandmark.FLANDMARK_Model;
 import org.opencv.core.CvType;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
-import org.opencv.core.Rect2d;
-import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.core.Core.MinMaxLocResult;
 import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.objdetect.Objdetect;
-import org.opencv.tracking.Tracker;
-import org.opencv.tracking.TrackerBoosting;
 import org.opencv.imgproc.Imgproc;
 
 /**
@@ -36,46 +29,32 @@ import org.opencv.imgproc.Imgproc;
 public class FaceHandler {
 
 	private static final CascadeClassifier faceCascade;
-	private static final CascadeClassifier rightEyeCascade;
-	private static final CascadeClassifier leftEyeCascade;
-	private static final CascadeClassifier mouthCascade;
-	private static final CascadeClassifier noseCascade;
+	private static final FLANDMARK_Model model;
 
-	private static Tracker noseTracker;
-	private static Tracker mouthTracker;
+	private double[] faceMarks;
+	private Point[] faceMarkPoints;
 
 	public PointHistoryCollection leftEye = new PointHistoryCollection(3);
 	public PointHistoryCollection rightEye = new PointHistoryCollection(3);
-	public PointHistoryCollection mouth = new PointHistoryCollection(3);
-	public PointHistoryCollection nose = new PointHistoryCollection(3);
 
 	static {
 		faceCascade = new CascadeClassifier();
 		faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
 
-		leftEyeCascade = new CascadeClassifier();
-		leftEyeCascade.load("./src/main/resources/haarcascade_lefteye_2splits.xml");
+		model = flandmark.flandmark_init("./src/main/resources/flandmark_model.dat");
+		if (model == null) {
+			System.out.println("Structure model wasn't created. Corrupted file flandmark_model.dat?");
+			System.exit(1);
+		}
 
-		rightEyeCascade = new CascadeClassifier();
-		rightEyeCascade.load("./src/main/resources/haarcascade_righteye_2splits.xml");
-
-		mouthCascade = new CascadeClassifier();
-		mouthCascade.load("./src/main/resources/haarcascade_mouth.xml");
-
-		noseCascade = new CascadeClassifier();
-		noseCascade.load("./src/main/resources/haarcascade_nose.xml");
-
-		noseTracker = null;
-		mouthTracker = null;
 	}
 
 	public FaceHandler() {
-
+		this.faceMarks = new double[2 * model.data().options().M()];
+		this.faceMarkPoints = new Point[model.data().options().M() + 3];
 	}
 
 	public void initializeFrameInformation(Mat inputFrame) {
-		Helpers.bright(inputFrame, 25);
-
 		Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64F);
 
 		Imgproc.cvtColor(inputFrame, frame, Imgproc.COLOR_BGR2GRAY);
@@ -86,77 +65,92 @@ public class FaceHandler {
 			return;
 		}
 
-		Mat faceSubframe = frame.submat(faceLocation);
+		try (Pointer framePtr = Helpers.getPointer(frame.getNativeObjAddr())) {
+			int[] bbox = getBoundindBox(faceLocation);
+			org.bytedeco.javacpp.opencv_core.Mat img_grayscale_mat = new org.bytedeco.javacpp.opencv_core.Mat(framePtr);
+			org.bytedeco.javacpp.opencv_core.IplImage img_grayscale = new org.bytedeco.javacpp.opencv_core.IplImage(
+					img_grayscale_mat);
 
-		if (Constants.smoothFaceImage) {
-			double sigma = Constants.smoothFaceFactor * faceSubframe.width();
-			Imgproc.GaussianBlur(faceSubframe, faceSubframe, new Size(), sigma);
-		}
-
-		// Initialise variables
-		double faceLeftSide = 0;
-		MatOfRect leftEyeDetections = new MatOfRect();
-
-		double faceRightSide = faceSubframe.width();
-		MatOfRect rightEyeDetections = new MatOfRect();
-
-		// Detect eyes
-		leftEyeCascade.detectMultiScale(faceSubframe, leftEyeDetections, 1.05, 0, Objdetect.CASCADE_DO_CANNY_PRUNING,
-				new Size(), new Size(faceSubframe.width(), faceSubframe.height()));
-
-		rightEyeCascade.detectMultiScale(faceSubframe, rightEyeDetections, 1.05, 0, Objdetect.CASCADE_DO_CANNY_PRUNING,
-				new Size(), new Size(faceSubframe.width(), faceSubframe.height()));
-
-		// Get eye centres
-		if (!leftEyeDetections.empty()) {
-			Rect leftEyeRegion = getEyeLocation(leftEyeDetections.toArray(), faceLeftSide, faceRightSide);
-			if (leftEyeRegion != null) {
-				Point leftEyeCenter = EyeHandler.getEyeCenter(faceSubframe, leftEyeRegion);
-
-				leftEyeCenter.x += faceLocation.x + leftEyeRegion.x;
-				leftEyeCenter.y += faceLocation.y + leftEyeRegion.y;
-				this.leftEye.insertNewPoint(leftEyeCenter);
+			if (flandmark.flandmark_detect(img_grayscale, bbox, model, faceMarks) != 0) {
+				return;
 			}
+
+			this.marksToPoints();
+
+		} catch (Exception e) {
+			return;
 		}
 
-		if (!rightEyeDetections.empty()) {
-			Rect rightEyeRegion = getEyeLocation(rightEyeDetections.toArray(), faceRightSide, faceLeftSide);
+		Point leftEyeBioCenter = this.getFaceMark(MarkPoint.LeftEyeBioCenter);
+		Point rightEyeBioCenter = this.getFaceMark(MarkPoint.RightEyeBioCenter);
 
-			if (rightEyeRegion != null) {
-				Point rightEyeCenter = EyeHandler.getEyeCenter(faceSubframe, rightEyeRegion);
+		double leftEyeRadius = Helpers.distanceBetweenPoints(this.getFaceMark(MarkPoint.LeftEyeLeftCorner),
+				this.getFaceMark(MarkPoint.LeftEyeRightCorder)) / 2;
+		double rightEyeRadius = Helpers.distanceBetweenPoints(this.getFaceMark(MarkPoint.RightEyeLeftCorner),
+				this.getFaceMark(MarkPoint.RightEyeRightCorner)) / 2;
 
-				rightEyeCenter.x += faceLocation.x + rightEyeRegion.x;
-				rightEyeCenter.y += faceLocation.y + rightEyeRegion.y;
-				this.rightEye.insertNewPoint(rightEyeCenter);
-			}
+		Rect leftEyeRegion = new Rect((int) (leftEyeBioCenter.x - leftEyeRadius),
+				(int) (leftEyeBioCenter.y - leftEyeRadius), (int) leftEyeRadius * 2, (int) leftEyeRadius * 2);
+		Rect rightEyeRegion = new Rect((int) (rightEyeBioCenter.x - rightEyeRadius),
+				(int) (rightEyeBioCenter.y - rightEyeRadius), (int) rightEyeRadius * 2, (int) rightEyeRadius * 2);
+
+		Point leftEyeCenter = EyeHandler.getEyeCenter(frame.submat(leftEyeRegion));
+
+		leftEyeCenter.x += leftEyeRegion.x;
+		leftEyeCenter.y += leftEyeRegion.y;
+		this.leftEye.insertNewPoint(leftEyeCenter);
+
+		Point rightEyeCenter = EyeHandler.getEyeCenter(frame.submat(rightEyeRegion));
+
+		rightEyeCenter.x += rightEyeRegion.x;
+		rightEyeCenter.y += rightEyeRegion.y;
+		this.rightEye.insertNewPoint(rightEyeCenter);
+	}
+
+	public Point getFaceMark(MarkPoint mark) {
+		switch (mark) {
+		case Center:
+			return faceMarkPoints[0];
+		case LeftEyeRightCorder:
+			return faceMarkPoints[1];
+		case RightEyeLeftCorner:
+			return faceMarkPoints[2];
+		case MouthLeftCorner:
+			return faceMarkPoints[3];
+		case MouthRightCorner:
+			return faceMarkPoints[4];
+		case LeftEyeLeftCorner:
+			return faceMarkPoints[5];
+		case RightEyeRightCorner:
+			return faceMarkPoints[6];
+		case Nose:
+			return faceMarkPoints[7];
+		case LeftEyeBioCenter:
+			return faceMarkPoints[8];
+		case RightEyeBioCenter:
+			return faceMarkPoints[9];
+		case MouthCenter:
+			return faceMarkPoints[10];
+		default:
+			return faceMarkPoints[0];
+		}
+	}
+
+	private void marksToPoints() {
+		int x = 0;
+		for (int i = 0; i < faceMarks.length; i += 2, x++) {
+			faceMarkPoints[x] = new Point(faceMarks[i], faceMarks[i + 1]);
 		}
 
-		MatOfRect mouthDetections = new MatOfRect();
-		mouthCascade.detectMultiScale(faceSubframe, mouthDetections, 1.05, 3, Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(),
-				new Size(faceSubframe.width(), faceSubframe.height()));
+		faceMarkPoints[x++] = Helpers.centerOfPoints(faceMarkPoints[5], faceMarkPoints[1]);
+		faceMarkPoints[x++] = Helpers.centerOfPoints(faceMarkPoints[2], faceMarkPoints[6]);
+		faceMarkPoints[x++] = Helpers.centerOfPoints(faceMarkPoints[3], faceMarkPoints[4]);
+	}
 
-		if (!mouthDetections.empty()) {
-			Point location = Helpers.centerOfRect(mouthDetections.toArray()[0]);
-			
-			location.x += faceLocation.x;
-			location.y += faceLocation.y;
-			
-			this.mouth.insertNewPoint(location);
-		}
-
-		MatOfRect noseDetections = new MatOfRect();
-		noseCascade.detectMultiScale(faceSubframe, noseDetections, 1.05, 3, Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(),
-				new Size(faceSubframe.width(), faceSubframe.height()));
-
-		if (!noseDetections.empty()) {
-			Point location = Helpers.centerOfRect(noseDetections.toArray()[0]);
-			
-			location.x += faceLocation.x;
-			location.y += faceLocation.y;
-			
-			this.nose.insertNewPoint(location);
-		}
-
+	private static int[] getBoundindBox(Rect rectangle) {
+		int[] bbox = new int[] { rectangle.x, rectangle.y, rectangle.x + rectangle.width,
+				rectangle.y + rectangle.height };
+		return bbox;
 	}
 
 	private Rect getFaceLocation(Mat frame) {
@@ -184,23 +178,4 @@ public class FaceHandler {
 
 		return faceLocation;
 	}
-
-	private Rect getEyeLocation(Rect[] detections, double faceDesiredSide, double faceUndesiredSide) {
-		Rect rightEyeRegion = null;
-		double minEyeToSideDistance = Double.MAX_VALUE;
-
-		for (Rect eyeRegion : detections) {
-			double eyeRegionX = Helpers.centerOfRectXAxis(eyeRegion);
-			double distanceToDesired = Helpers.distanceBetweenValues(eyeRegionX, faceDesiredSide);
-			double distanceToUndesired = Helpers.distanceBetweenValues(eyeRegionX, faceUndesiredSide);
-
-			if (distanceToDesired < minEyeToSideDistance && distanceToDesired < distanceToUndesired) {
-				minEyeToSideDistance = distanceToDesired;
-				rightEyeRegion = eyeRegion;
-			}
-		}
-
-		return rightEyeRegion;
-	}
-
 }
