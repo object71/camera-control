@@ -47,8 +47,8 @@ public class Program extends Frame {
 
 		stopwatch.stop();
 		System.out.printf("Initialized in %dmS\n", stopwatch.getTime());
-
-		while (capture.read(frame)) {
+		boolean running = capture.read(frame);
+		while (running) {
 			stopwatch.reset();
 			stopwatch.start();
 
@@ -56,7 +56,7 @@ public class Program extends Frame {
 				System.err.println("--(!) No captured frame -- Break!");
 				break;
 			}
-			
+
 			try {
 				face.initializeFrameInformation(frame);
 			} catch (Exception e) {
@@ -64,12 +64,21 @@ public class Program extends Frame {
 			}
 
 			stopwatch.stop();
-			System.out.printf("Frame process time is %dmS\n", stopwatch.getTime());
+//			System.out.printf("Frame process time is %dmS\n", stopwatch.getTime());
 			
+                        frame.release();
 			try {
-				Thread.sleep(5);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
+			}
+                        
+                        System.gc();
+
+			try {
+				running = capture.read(frame);
+			} catch (Exception e) {
+
 			}
 		}
 

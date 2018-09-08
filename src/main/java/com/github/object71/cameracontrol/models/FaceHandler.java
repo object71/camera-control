@@ -34,227 +34,239 @@ import org.opencv.imgproc.Imgproc;
  */
 public class FaceHandler {
 
-	private static final CascadeClassifier faceCascade;
-	private static final FLANDMARK_Model model;
+    private static final CascadeClassifier faceCascade;
+    private static final FLANDMARK_Model model;
 
-	private double[] faceMarks;
-	private Point[] faceMarkPoints;
-	private Tracker faceTracker;
-	private Rect2d trackedFace;
+    private final double[] faceMarks;
+    private final Point[] faceMarkPoints;
+    private Tracker faceTracker;
+    private Rect2d trackedFace;
 
-	public PointHistoryCollection leftEye = new PointHistoryCollection(3);
-	public PointHistoryCollection rightEye = new PointHistoryCollection(3);
+    public PointHistoryCollection leftEye = new PointHistoryCollection(3);
+    public PointHistoryCollection rightEye = new PointHistoryCollection(3);
 
-	public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(3);
-	public double coordinateSystemSide = 1;
+    public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(3);
+    public double coordinateSystemSide = 1;
 
-	static {
-		faceCascade = new CascadeClassifier();
-		faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
+    static {
+        faceCascade = new CascadeClassifier();
+        faceCascade.load("./src/main/resources/haarcascade_frontalface_alt.xml");
 
-		model = flandmark.flandmark_init("./src/main/resources/flandmark_model.dat");
-		if (model == null) {
-			System.out.println("Structure model wasn't created. Corrupted file flandmark_model.dat?");
-			System.exit(1);
-		}
+        model = flandmark.flandmark_init("./src/main/resources/flandmark_model.dat");
+        if (model == null) {
+            System.out.println("Structure model wasn't created. Corrupted file flandmark_model.dat?");
+            System.exit(1);
+        }
 
-	}
+    }
 
-	public FaceHandler() {
-		this.faceMarks = new double[2 * model.data().options().M()];
-		this.faceMarkPoints = new Point[model.data().options().M()];
-		
-	}
+    public FaceHandler() {
+        this.faceMarks = new double[2 * model.data().options().M()];
+        this.faceMarkPoints = new Point[model.data().options().M()];
 
-	public void initializeFrameInformation(Mat inputFrame) {
+    }
 
-		if (inputFrame == null || inputFrame.empty()) {
-			return;
-		}
+    public void initializeFrameInformation(Mat inputFrame) {
 
-		Core.flip(inputFrame, inputFrame, 1);
+        if (inputFrame == null || inputFrame.empty()) {
+            return;
+        }
 
-		Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64F);
+        Size size = inputFrame.size();
+        Size commonSize = new Size(640, 480);
+        if (size.width != commonSize.width || size.height != commonSize.height) {
+            Mat resizedFrame = new Mat(commonSize, inputFrame.type());
+            Imgproc.resize(inputFrame, resizedFrame, commonSize);
+            Mat old = inputFrame;
+            inputFrame = resizedFrame;
+            old.release();
+        }
 
-		Imgproc.cvtColor(inputFrame, frame, Imgproc.COLOR_BGR2GRAY);
-		Imgproc.equalizeHist(frame, frame);
+        Core.flip(inputFrame, inputFrame, 1);
 
-		if (frame == null || frame.empty()) {
-			return;
-		}
-		
-		Rect faceLocation = null;
-		if (faceTracker == null) {
-			faceLocation = this.getFaceLocation(frame);
-			if (faceLocation == null) {
-				return;
-			}
-			
-			trackedFace = Helpers.RectToRect2d(faceLocation);
+        Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CvType.CV_64F);
 
-			faceTracker = TrackerBoosting.create();
-			faceTracker.init(inputFrame, trackedFace);
-		} else {
-			if(faceTracker.update(inputFrame, trackedFace)) {
-				faceLocation = Helpers.Rect2dToRect(trackedFace);
-			}
-		}
-		
-		if(faceLocation == null) {
-			return;
-		}
+        Imgproc.cvtColor(inputFrame, frame, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.equalizeHist(frame, frame);
 
-		try (Pointer framePtr = Helpers.getPointer(frame.clone().getNativeObjAddr())) {
+        if (frame.empty()) {
+            return;
+        }
+        
+        Rect faceLocation = null;
+        if (faceTracker == null) {
+            faceLocation = this.getFaceLocation(frame);
+            if (faceLocation == null) {
+                return;
+            }
 
-			int[] bbox = getBoundindBox(faceLocation);
-			org.bytedeco.javacpp.opencv_core.Mat img_grayscale_mat = new org.bytedeco.javacpp.opencv_core.Mat(framePtr);
-			org.bytedeco.javacpp.opencv_core.IplImage img_grayscale = new org.bytedeco.javacpp.opencv_core.IplImage(
-					img_grayscale_mat);
+            trackedFace = Helpers.RectToRect2d(faceLocation);
 
-			if (flandmark.flandmark_detect(img_grayscale, bbox, model, faceMarks) != 0) {
-				return;
-			}
+            faceTracker = TrackerBoosting.create();
+            faceTracker.init(inputFrame, trackedFace);
+        } else {
+            if (faceTracker.update(inputFrame, trackedFace)) {
+                faceLocation = Helpers.Rect2dToRect(trackedFace);
+            }
+        }
 
-			this.marksToPoints();
+        if (faceLocation == null) {
+            return;
+        }
 
-		} catch (Exception e) {
-			return;
-		}
+        try (Pointer framePtr = Helpers.getPointer(frame.clone().getNativeObjAddr());
+                org.bytedeco.javacpp.opencv_core.Mat img_grayscale_mat = new org.bytedeco.javacpp.opencv_core.Mat(
+                        framePtr);
+                org.bytedeco.javacpp.opencv_core.IplImage img_grayscale = new org.bytedeco.javacpp.opencv_core.IplImage(
+                        img_grayscale_mat);) {
 
-		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
-		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
-		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
-		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
+            int[] bbox = getBoundindBox(faceLocation);
+            if (flandmark.flandmark_detect(img_grayscale, bbox, model, faceMarks) != 0) {
+                return;
+            }
 
-		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
-		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
+            this.marksToPoints();
 
-		int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
+        } catch (Exception e) {
+            return;
+        }
 
-		Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
+        Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
+        Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
+        Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
+        Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
 
-		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
+        double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
+        double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
 
-		Point leftEyeCenter = EyeHandler.getEyeCenter(frame.submat(leftEyeBall));
+        int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
 
-		leftEyeCenter.x += leftEyeBall.x;
-		leftEyeCenter.y += leftEyeBall.y;
-		this.leftEye.insertNewPoint(leftEyeCenter);
+        Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
+                commonDistance, commonDistance);
 
-		Point rightEyeCenter = EyeHandler.getEyeCenter(frame.submat(rightEyeBall));
+        Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
+                commonDistance, commonDistance);
 
-		rightEyeCenter.x += rightEyeBall.x;
-		rightEyeCenter.y += rightEyeBall.y;
-		this.rightEye.insertNewPoint(rightEyeCenter);
-		
-		this.recalculateCoordinates();
-	}
+        Point leftEyeCenter = EyeHandler.getEyeCenter(frame.submat(leftEyeBall));
 
-	public Point getFaceMark(MarkPoint mark) {
-		switch (mark) {
-		case Center:
-			return faceMarkPoints[0];
-		case LeftEyeRightCorder:
-			return faceMarkPoints[1];
-		case RightEyeLeftCorner:
-			return faceMarkPoints[2];
-		case MouthLeftCorner:
-			return faceMarkPoints[3];
-		case MouthRightCorner:
-			return faceMarkPoints[4];
-		case LeftEyeLeftCorner:
-			return faceMarkPoints[5];
-		case RightEyeRightCorner:
-			return faceMarkPoints[6];
-		case Nose:
-			return faceMarkPoints[7];
-		default:
-			return faceMarkPoints[0];
-		}
-	}
+        leftEyeCenter.x += leftEyeBall.x;
+        leftEyeCenter.y += leftEyeBall.y;
+        this.leftEye.insertNewPoint(leftEyeCenter);
 
-	private void marksToPoints() {
-		int x = 0;
-		for (int i = 0; i < faceMarks.length; i += 2, x++) {
-			faceMarkPoints[x] = new Point(faceMarks[i], faceMarks[i + 1]);
-		}
-	}
+        Point rightEyeCenter = EyeHandler.getEyeCenter(frame.submat(rightEyeBall));
 
-	private static int[] getBoundindBox(Rect rectangle) {
-		int[] bbox = new int[] { rectangle.x, rectangle.y, rectangle.x + rectangle.width,
-				rectangle.y + rectangle.height };
-		return bbox;
-	}
+        rightEyeCenter.x += rightEyeBall.x;
+        rightEyeCenter.y += rightEyeBall.y;
+        this.rightEye.insertNewPoint(rightEyeCenter);
 
-	private Rect getFaceLocation(Mat frame) {
+        this.recalculateCoordinates();
 
-		if (faceCascade.empty()) {
-			throw new RuntimeException("Face cascade is empty.");
-		}
-		MatOfRect faces = new MatOfRect();
+        frame.release();
+    }
 
-		faceCascade.detectMultiScale(frame, faces, 1.1, 2,
-				Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_FIND_BIGGEST_OBJECT, new Size(), frame.size());
+    public Point getFaceMark(MarkPoint mark) {
+        switch (mark) {
+            case Center:
+                return faceMarkPoints[0];
+            case LeftEyeRightCorder:
+                return faceMarkPoints[1];
+            case RightEyeLeftCorner:
+                return faceMarkPoints[2];
+            case MouthLeftCorner:
+                return faceMarkPoints[3];
+            case MouthRightCorner:
+                return faceMarkPoints[4];
+            case LeftEyeLeftCorner:
+                return faceMarkPoints[5];
+            case RightEyeRightCorner:
+                return faceMarkPoints[6];
+            case Nose:
+                return faceMarkPoints[7];
+            default:
+                return faceMarkPoints[0];
+        }
+    }
 
-		double maxDistance = 0;
-		Rect[] arrayFaces = faces.toArray();
-		Rect faceLocation = null;
-		if (arrayFaces.length == 0) {
-			return null;
-		}
+    private void marksToPoints() {
+        int x = 0;
+        for (int i = 0; i < faceMarks.length; i += 2, x++) {
+            faceMarkPoints[x] = new Point(faceMarks[i], faceMarks[i + 1]);
+        }
+    }
 
-		for (Rect face : arrayFaces) {
-			Point faceCenter = Helpers.centerOfRect(face);
-			Point imageCenter = Helpers.centerOfRect(new Rect(0, 0, frame.width(), frame.height()));
-			double distance = Helpers.distanceBetweenPoints(faceCenter, imageCenter);
-			if (distance > maxDistance) {
-				maxDistance = distance;
-				faceLocation = face;
-			}
-		}
+    private static int[] getBoundindBox(Rect rectangle) {
+        int[] bbox = new int[]{rectangle.x, rectangle.y, rectangle.x + rectangle.width,
+            rectangle.y + rectangle.height};
+        return bbox;
+    }
 
-		return faceLocation;
-	}
+    private Rect getFaceLocation(Mat frame) {
 
-	public void recalculateCoordinates() {
-		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
-		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
-		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
-		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
+        if (faceCascade.empty()) {
+            throw new RuntimeException("Face cascade is empty.");
+        }
+        MatOfRect faces = new MatOfRect();
 
-		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
-		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
+        faceCascade.detectMultiScale(frame, faces, 1.1, 2,
+                Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_FIND_BIGGEST_OBJECT, new Size(), frame.size());
 
-		int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
+        double maxDistance = 0;
+        Rect[] arrayFaces = faces.toArray();
+        Rect faceLocation = null;
+        if (arrayFaces.length == 0) {
+            return null;
+        }
 
-		Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
+        for (Rect face : arrayFaces) {
+            Point faceCenter = Helpers.centerOfRect(face);
+            Point imageCenter = Helpers.centerOfRect(new Rect(0, 0, frame.width(), frame.height()));
+            double distance = Helpers.distanceBetweenPoints(faceCenter, imageCenter);
+            if (distance > maxDistance) {
+                maxDistance = distance;
+                faceLocation = face;
+            }
+        }
 
-		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
+        return faceLocation;
+    }
 
-		this.coordinateSystemSide = commonDistance;
+    public void recalculateCoordinates() {
+        Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
+        Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
+        Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
+        Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
 
-		Point coordinateLeft = null;
-		Point coordinateRight = null;
-		Point leftEye = this.leftEye.getAveragePoint();
-		Point rightEye = this.rightEye.getAveragePoint();
+        double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
+        double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
 
-		if (leftEyeBall.contains(leftEye)) {
-			coordinateLeft = new Point(leftEye.x - leftEyeBall.x, leftEye.y - leftEyeBall.y);
-		}
+        int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
 
-		if (rightEyeBall.contains(this.rightEye.getAveragePoint())) {
-			coordinateRight = new Point(rightEye.x - rightEyeBall.x, rightEye.y - rightEyeBall.y);
-		}
+        Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
+                commonDistance, commonDistance);
 
-		if (coordinateLeft == null && coordinateRight == null) {
-			eyeGazeCoordinate.insertNewPoint(null);
-		} else {
-			eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(coordinateLeft, coordinateRight));
-		}
+        Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
+                commonDistance, commonDistance);
 
-	}
+        this.coordinateSystemSide = commonDistance;
+
+        Point coordinateLeft = null;
+        Point coordinateRight = null;
+        Point leftEyeLocal = this.leftEye.getAveragePoint();
+        Point rightEyeLocal = this.rightEye.getAveragePoint();
+
+        if (leftEyeBall.contains(leftEyeLocal)) {
+            coordinateLeft = new Point(leftEyeLocal.x - leftEyeBall.x, leftEyeLocal.y - leftEyeBall.y);
+        }
+
+        if (rightEyeBall.contains(this.rightEye.getAveragePoint())) {
+            coordinateRight = new Point(rightEyeLocal.x - rightEyeBall.x, rightEyeLocal.y - rightEyeBall.y);
+        }
+
+        if (coordinateLeft == null && coordinateRight == null) {
+            eyeGazeCoordinate.insertNewPoint(null);
+        } else {
+            eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(coordinateLeft, coordinateRight));
+        }
+
+    }
 }

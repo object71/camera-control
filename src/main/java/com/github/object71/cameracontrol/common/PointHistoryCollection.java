@@ -41,6 +41,7 @@ public class PointHistoryCollection {
     
     public void insertNewPoint(Point point) {
         points[current] = point;
+        
         current++;
         if(current == size) {
             current = 0;
