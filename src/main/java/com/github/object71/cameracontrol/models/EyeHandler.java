@@ -23,6 +23,11 @@ public class EyeHandler {
         
         int rows = eyeRegionSubframe.rows();
         int cols = eyeRegionSubframe.cols();
+        
+        if(rows < 3 || cols < 3) {
+        	return null;
+        }
+        
         double[] frameAsDoubles = Helpers.matrixToArray(eyeRegionSubframe);
 
         GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);

@@ -33,6 +33,14 @@ public class Helpers {
 		};
 		return pointer;
     }
+    
+    public static Rect2d RectToRect2d(Rect rectangle) {
+    	return new Rect2d(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+    }
+    
+    public static Rect Rect2dToRect(Rect2d rectangle) {
+    	return new Rect((int)rectangle.x, (int)rectangle.y, (int)rectangle.width, (int)rectangle.height);
+    }
 
     public static boolean isPointInMatrix(Point point, Mat matrix) {
         return point.x >= 0 && point.x < matrix.cols() && point.y >= 0 && point.y < matrix.rows();
