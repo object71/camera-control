@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.ButtonBar?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+
+
+<BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/10.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.object71.cameracontrol.CameraControlController">
+   <center>
+      <ImageView id="centerImage" fx:id="centerImage" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" BorderPane.alignment="CENTER" />
+   </center>
+   <bottom>
+      <ButtonBar prefHeight="34.0" prefWidth="600.0" BorderPane.alignment="CENTER">
+         <buttons>
+            <ToggleButton fx:id="mouseMoveButton" mnemonicParsing="false" onAction="#controlMouse" text="Move Mouse" />
+            <ToggleButton fx:id="mouseCalibration" mnemonicParsing="false" onAction="#calibrateOnMouseClick" text="Mouse Calibration" />
+            <ToggleButton id="processButton" fx:id="processButton" mnemonicParsing="false" onAction="#startProcess" text="Process" />
+         </buttons>
+         <BorderPane.margin>
+            <Insets top="5.0" />
+         </BorderPane.margin>
+         <padding>
+            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+         </padding>
+      </ButtonBar>
+   </bottom>
+</BorderPane>
