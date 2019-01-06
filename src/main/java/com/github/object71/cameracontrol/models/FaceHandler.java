@@ -12,20 +12,20 @@ import com.github.object71.cameracontrol.common.PointHistoryCollection;
 
 import org.opencv.core.Mat;
 
-import java.awt.AWTEvent;
 import java.awt.AWTException;
 import java.awt.Dimension;
 import java.awt.Image;
 import java.awt.Robot;
 import java.awt.Toolkit;
-import java.awt.event.AWTEventListener;
-import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.flandmark;
 import org.bytedeco.javacpp.flandmark.FLANDMARK_Model;
+import org.jnativehook.GlobalScreen;
+import org.jnativehook.NativeHookException;
+import org.jnativehook.mouse.NativeMouseEvent;
+import org.jnativehook.mouse.NativeMouseListener;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.MatOfRect;
@@ -45,7 +45,7 @@ import org.opencv.imgproc.Imgproc;
  *
  * @author hristo
  */
-public class FaceHandler implements Runnable, AWTEventListener {
+public class FaceHandler implements Runnable {
 
 	private static CascadeClassifier faceCascade;
 	private static FLANDMARK_Model model;
@@ -60,13 +60,19 @@ public class FaceHandler implements Runnable, AWTEventListener {
 	public PointHistoryCollection leftEye = new PointHistoryCollection(3);
 	public PointHistoryCollection rightEye = new PointHistoryCollection(3);
 
-	public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(3);
-	public double coordinateSystemSide = 1;
+	public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(2);
+	public double coordinateSystemSide = 80;
 
 	public Thread currentThread;
 	public boolean process;
 	public boolean calibrateOnMouseClick;
 	public boolean controlMouse;
+	public boolean closing = false;
+	
+	public double leftBound = coordinateSystemSide;
+	public double rightBound = 0;
+	public double topBound = coordinateSystemSide;
+	public double bottomBound = 0;
 
 	private ArrayList<ImageProcessedListener> imageProcessedListeners = new ArrayList<ImageProcessedListener>();
 
@@ -97,22 +103,58 @@ public class FaceHandler implements Runnable, AWTEventListener {
 
 		currentThread = null;
 		process = false;
+		
+		try {
+			GlobalScreen.registerNativeHook();
+		} catch (NativeHookException e1) {
+			e1.printStackTrace();
+		}
+		
+		GlobalScreen.addNativeMouseListener(new NativeMouseListener() {
+			
+			@Override
+			public void nativeMouseClicked(NativeMouseEvent e) {
+				Point currentGazePoint = eyeGazeCoordinate.getAveragePoint();
+				
+				if (currentGazePoint == null) {
+					return;
+				}
+				
+				if(currentGazePoint.x < leftBound) {
+					leftBound = currentGazePoint.x;
+				}
+				
+				if(currentGazePoint.x > rightBound) {
+					rightBound = currentGazePoint.x;
+				}
+				
+				if(currentGazePoint.y < topBound) {
+					topBound = currentGazePoint.y;
+				}
+				
+				if(currentGazePoint.y > bottomBound) {
+					bottomBound = currentGazePoint.y;
+				}
+			}
 
-		toolkit.addAWTEventListener(this, AWTEvent.MOUSE_EVENT_MASK);
+			@Override
+			public void nativeMousePressed(NativeMouseEvent e) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void nativeMouseReleased(NativeMouseEvent e) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+		});
 
 		try {
 			robot = new Robot();
 		} catch (AWTException e) {
 			e.printStackTrace();
-		}
-	}
-
-	public void eventDispatched(AWTEvent event) {
-		if (event instanceof MouseEvent) {
-			MouseEvent mouseEvent = (MouseEvent) event;
-			int x = mouseEvent.getXOnScreen();
-			int y = mouseEvent.getYOnScreen();
-
 		}
 	}
 
@@ -123,6 +165,7 @@ public class FaceHandler implements Runnable, AWTEventListener {
 			rightEye.insertNewPoint(null);
 			eyeGazeCoordinate.insertNewPoint(null);
 
+			inputFrame.release();
 			return;
 		}
 
@@ -148,6 +191,7 @@ public class FaceHandler implements Runnable, AWTEventListener {
 			rightEye.insertNewPoint(null);
 			eyeGazeCoordinate.insertNewPoint(null);
 
+			inputFrame.release();
 			return;
 		}
 
@@ -159,6 +203,7 @@ public class FaceHandler implements Runnable, AWTEventListener {
 				rightEye.insertNewPoint(null);
 				eyeGazeCoordinate.insertNewPoint(null);
 
+				inputFrame.release();
 				return;
 			}
 
@@ -177,6 +222,7 @@ public class FaceHandler implements Runnable, AWTEventListener {
 			rightEye.insertNewPoint(null);
 			eyeGazeCoordinate.insertNewPoint(null);
 
+			inputFrame.release();
 			return;
 		}
 
@@ -188,12 +234,15 @@ public class FaceHandler implements Runnable, AWTEventListener {
 
 			int[] bbox = getBoundindBox(faceLocation);
 			if (flandmark.flandmark_detect(img_grayscale, bbox, model, faceMarks) != 0) {
+				
+				inputFrame.release();
 				return;
 			}
 
 			this.marksToPoints();
 
 		} catch (Exception e) {
+			inputFrame.release();
 			return;
 		}
 
@@ -214,19 +263,14 @@ public class FaceHandler implements Runnable, AWTEventListener {
 				commonDistance, commonDistance);
 
 		Point leftEyeCenter = EyeHandler.getEyeCenter(frame.submat(leftEyeBall));
-
-		leftEyeCenter.x += leftEyeBall.x;
-		leftEyeCenter.y += leftEyeBall.y;
 		this.leftEye.insertNewPoint(leftEyeCenter);
 
 		Point rightEyeCenter = EyeHandler.getEyeCenter(frame.submat(rightEyeBall));
-
-		rightEyeCenter.x += rightEyeBall.x;
-		rightEyeCenter.y += rightEyeBall.y;
 		this.rightEye.insertNewPoint(rightEyeCenter);
 
 		this.recalculateCoordinates();
 
+		inputFrame.release();
 		frame.release();
 	}
 
@@ -297,42 +341,44 @@ public class FaceHandler implements Runnable, AWTEventListener {
 	}
 
 	public void recalculateCoordinates() {
-		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
-		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
-		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
-		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
-
-		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
-		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
-
-		int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
-
-		Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
-
-		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
-				commonDistance, commonDistance);
-
-		this.coordinateSystemSide = commonDistance;
-
-		Point coordinateLeft = null;
-		Point coordinateRight = null;
-		Point leftEyeLocal = this.leftEye.getAveragePoint();
-		Point rightEyeLocal = this.rightEye.getAveragePoint();
-
-		if (leftEyeBall.contains(leftEyeLocal)) {
-			coordinateLeft = new Point(leftEyeLocal.x - leftEyeBall.x, leftEyeLocal.y - leftEyeBall.y);
-		}
-
-		if (rightEyeBall.contains(this.rightEye.getAveragePoint())) {
-			coordinateRight = new Point(rightEyeLocal.x - rightEyeBall.x, rightEyeLocal.y - rightEyeBall.y);
-		}
-
-		if (coordinateLeft == null && coordinateRight == null) {
-			eyeGazeCoordinate.insertNewPoint(null);
-		} else {
-			eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(coordinateLeft, coordinateRight));
-		}
+//		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
+//		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
+//		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
+//		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
+//
+//		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
+//		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
+//
+//		int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
+//
+//		Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
+//				commonDistance, commonDistance);
+//
+//		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
+//				commonDistance, commonDistance);
+//
+//		this.coordinateSystemSide = commonDistance;
+//
+//		Point coordinateLeft = null;
+//		Point coordinateRight = null;
+//		Point leftEyeLocal = this.leftEye.getAveragePoint();
+//		Point rightEyeLocal = this.rightEye.getAveragePoint();
+//
+//		if (leftEyeBall.contains(leftEyeLocal)) {
+//			coordinateLeft = new Point(leftEyeLocal.x, leftEyeLocal.y);
+//		}
+//
+//		if (rightEyeBall.contains(this.rightEye.getAveragePoint())) {
+//			coordinateRight = new Point(rightEyeLocal.x, rightEyeLocal.y);
+//		}
+//
+//		if (coordinateLeft == null && coordinateRight == null) {
+//			eyeGazeCoordinate.insertNewPoint(null);
+//		} else {
+//			eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(coordinateLeft, coordinateRight));
+//		}
+		
+		eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(this.leftEye.getAveragePoint(), this.rightEye.getAveragePoint()));
 
 	}
 
@@ -349,7 +395,7 @@ public class FaceHandler implements Runnable, AWTEventListener {
 		Mat frame = new Mat();
 
 		boolean running = capture.read(frame);
-		while (running) {
+		while (running && !closing) {
 			if (process) {
 
 				if (frame.empty()) {
@@ -360,8 +406,8 @@ public class FaceHandler implements Runnable, AWTEventListener {
 				if (frame.cols() > 0 || frame.rows() > 0) {
 
 					try {
+						this.triggerImageProcessed(HighGui.toBufferedImage(frame));
 						this.initializeFrameInformation(frame);
-						//this.triggerImageProcessed(HighGui.toBufferedImage(frame));
 					} catch (Exception e) {
 						System.out.println(e.getMessage());
 					}
@@ -379,12 +425,12 @@ public class FaceHandler implements Runnable, AWTEventListener {
 				} catch (Exception e) {
 
 				}
-			} else {
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+			}
+
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
 		}
 
@@ -392,21 +438,53 @@ public class FaceHandler implements Runnable, AWTEventListener {
 	}
 
 	public void moveMouse() {
-
+		
+		Dimension screenDimensions = toolkit.getScreenSize();
+		
+		double screenWidth = screenDimensions.getWidth();
+		double screenHeight = screenDimensions.getHeight();
+		
+		double kX = (rightBound - leftBound) / screenWidth;
+		double kY = (bottomBound - topBound) / screenHeight;
+		
+		int x = 0;
+		int y = 0;
+		
 		Point coord = this.eyeGazeCoordinate.getAveragePoint();
 
 		if (coord == null) {
 			return;
 		}
-
-		Dimension screenDimensions = toolkit.getScreenSize();
-
-		double kX = this.coordinateSystemSide / screenDimensions.getWidth();
-		double kY = this.coordinateSystemSide / screenDimensions.getHeight();
-		int x = (int) ((coord.x) / kX);
-		int y = (int) ((coord.y) / kY);
-
-		robot.mouseMove(x, y);
+		
+		if(coord.x > leftBound && coord.x < rightBound && coord.y > topBound && coord.y < bottomBound) {
+			x = (int) ((coord.x - leftBound) / kX);
+			y = (int) ((coord.y - topBound) / kY);
+		}
+		
+		if(coord.x > rightBound) {
+			x = (int) ((rightBound - leftBound) / kX) - 1;
+		}
+		
+		if(coord.y > bottomBound) {
+			y = (int) ((bottomBound - topBound) / kY) - 1;
+		}
+		
+		Point anchored = anchorOnRect(screenWidth, screenHeight, x, y, 4, 4);
+		robot.mouseMove((int) anchored.x, (int) anchored.y);
+	}
+	
+	private Point anchorOnRect(double width, double height, double x, double y, int rows, int cols) {
+		
+		double quadrantWidth = width / cols;
+		double quadrantHeight = height / rows;
+		
+		int currentColumn = (int) Math.floor(x / quadrantWidth);
+		int currentRow = (int) Math.floor(y / quadrantHeight);
+		
+		double anchoredX = (currentColumn * quadrantWidth) + (quadrantWidth / 2);
+		double anchoredY = (currentRow * quadrantHeight) + (quadrantHeight / 2);
+		
+		return new Point(anchoredX, anchoredY);
 	}
 
 	public void startThread() {

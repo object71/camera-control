@@ -20,19 +20,23 @@ public class EyeHandler {
 	
 	public static Point getEyeCenter(Mat eyeRegionSubframe) {
         
-        int rows = eyeRegionSubframe.rows();
-        int cols = eyeRegionSubframe.cols();
+        int rows = 80;
+        int cols = 80;
+        
+        Mat sizedImage = new Mat();
+        Size size = new Size(rows, cols);
+        Imgproc.resize(eyeRegionSubframe, sizedImage, size);
         
         if(rows < 3 || cols < 3) {
         	return null;
         }
         
-        double[] frameAsDoubles = Helpers.matrixToArray(eyeRegionSubframe);
+        double[] frameAsDoubles = Helpers.matrixToArray(sizedImage);
 
         GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
 
         Mat weight = new Mat(rows, cols, CvType.CV_64F);
-        Imgproc.GaussianBlur(eyeRegionSubframe, weight, new Size(Constants.weightBlurSize, Constants.weightBlurSize), 0,
+        Imgproc.GaussianBlur(sizedImage, weight, new Size(Constants.weightBlurSize, Constants.weightBlurSize), 0,
                 0);
 
         double[] sum = new double[rows * cols];
@@ -95,6 +99,7 @@ public class EyeHandler {
         }
 
         eyeRegionSubframe.release();
+        sizedImage.release();
         
         return result.maxLoc;
     }
