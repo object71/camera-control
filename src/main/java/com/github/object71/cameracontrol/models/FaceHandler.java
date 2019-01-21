@@ -7,7 +7,6 @@ package com.github.object71.cameracontrol.models;
 
 import com.github.object71.cameracontrol.common.Helpers;
 import com.github.object71.cameracontrol.common.ImageProcessedListener;
-import com.github.object71.cameracontrol.common.MarkPoint;
 import com.github.object71.cameracontrol.common.PointHistoryCollection;
 
 import org.opencv.core.Mat;
@@ -18,6 +17,10 @@ import java.awt.Image;
 import java.awt.Robot;
 import java.awt.Toolkit;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.flandmark;
@@ -27,6 +30,7 @@ import org.jnativehook.NativeHookException;
 import org.jnativehook.mouse.NativeMouseEvent;
 import org.jnativehook.mouse.NativeMouseListener;
 import org.opencv.core.Core;
+import org.opencv.core.Core.MinMaxLocResult;
 import org.opencv.core.CvType;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
@@ -51,9 +55,7 @@ public class FaceHandler implements Runnable {
 	private static FLANDMARK_Model model;
 	private static Toolkit toolkit = Toolkit.getDefaultToolkit();
 	private static Robot robot;
-
-	private final double[] faceMarks;
-	private final Point[] faceMarkPoints;
+	
 	private Tracker faceTracker;
 	private Rect2d trackedFace;
 
@@ -98,13 +100,17 @@ public class FaceHandler implements Runnable {
 			System.exit(1);
 		}
 
-		this.faceMarks = new double[2 * model.data().options().M()];
-		this.faceMarkPoints = new Point[model.data().options().M()];
-
 		currentThread = null;
 		process = false;
 		
 		try {
+			// Get the logger for "org.jnativehook" and set the level to off.
+			Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
+			logger.setLevel(Level.OFF);
+
+			// Don't forget to disable the parent handlers.
+			logger.setUseParentHandlers(false);
+			
 			GlobalScreen.registerNativeHook();
 		} catch (NativeHookException e1) {
 			e1.printStackTrace();
@@ -169,15 +175,15 @@ public class FaceHandler implements Runnable {
 			return;
 		}
 
-		Size size = inputFrame.size();
-		Size commonSize = new Size(1280, 960);
-		if (size.width != commonSize.width || size.height != commonSize.height) {
-			Mat resizedFrame = new Mat(commonSize, inputFrame.type());
-			Imgproc.resize(inputFrame, resizedFrame, commonSize);
-			Mat old = inputFrame;
-			inputFrame = resizedFrame;
-			old.release();
-		}
+//		Size size = inputFrame.size();
+//		Size commonSize = new Size(1280, 960);
+//		if (size.width != commonSize.width || size.height != commonSize.height) {
+//			Mat resizedFrame = new Mat(commonSize, inputFrame.type());
+//			Imgproc.resize(inputFrame, resizedFrame, commonSize);
+//			Mat old = inputFrame;
+//			inputFrame = resizedFrame;
+//			old.release();
+//		}
 
 		Core.flip(inputFrame, inputFrame, 1);
 
@@ -225,6 +231,8 @@ public class FaceHandler implements Runnable {
 			inputFrame.release();
 			return;
 		}
+		
+		Map<String, Point> marks;
 
 		try (Pointer framePtr = Helpers.getPointer(frame.clone().getNativeObjAddr());
 				org.bytedeco.javacpp.opencv_core.Mat img_grayscale_mat = new org.bytedeco.javacpp.opencv_core.Mat(
@@ -233,23 +241,26 @@ public class FaceHandler implements Runnable {
 						img_grayscale_mat);) {
 
 			int[] bbox = getBoundindBox(faceLocation);
+			double[] faceMarks = new double[2 * model.data().options().M()];
 			if (flandmark.flandmark_detect(img_grayscale, bbox, model, faceMarks) != 0) {
 				
 				inputFrame.release();
 				return;
 			}
+			
+			
 
-			this.marksToPoints();
+			marks = this.marksToPoints(faceMarks);
 
 		} catch (Exception e) {
 			inputFrame.release();
 			return;
 		}
 
-		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
-		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
-		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
-		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
+		Point leftEyeLeftCorner = marks.get("LeftEyeLeftCorner");
+		Point leftEyeRightCorner = marks.get("LeftEyeRightCorner");
+		Point rightEyeLeftCorner = marks.get("RightEyeLeftCorner");
+		Point rightEyeRightCorner = marks.get("RightEyeRightCorner");
 
 		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
 		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
@@ -261,11 +272,13 @@ public class FaceHandler implements Runnable {
 
 		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
 				commonDistance, commonDistance);
-
-		Point leftEyeCenter = EyeHandler.getEyeCenter(frame.submat(leftEyeBall));
+		
+		MinMaxLocResult leftEyeResult = EyeHandler.getEyeCenter(frame.submat(leftEyeBall));
+		Point leftEyeCenter = leftEyeResult.maxLoc;
 		this.leftEye.insertNewPoint(leftEyeCenter);
 
-		Point rightEyeCenter = EyeHandler.getEyeCenter(frame.submat(rightEyeBall));
+		MinMaxLocResult rightEyeResult = EyeHandler.getEyeCenter(frame.submat(rightEyeBall));
+		Point rightEyeCenter = rightEyeResult.maxLoc;
 		this.rightEye.insertNewPoint(rightEyeCenter);
 
 		this.recalculateCoordinates();
@@ -274,34 +287,22 @@ public class FaceHandler implements Runnable {
 		frame.release();
 	}
 
-	public Point getFaceMark(MarkPoint mark) {
-		switch (mark) {
-		case Center:
-			return faceMarkPoints[0];
-		case LeftEyeRightCorder:
-			return faceMarkPoints[1];
-		case RightEyeLeftCorner:
-			return faceMarkPoints[2];
-		case MouthLeftCorner:
-			return faceMarkPoints[3];
-		case MouthRightCorner:
-			return faceMarkPoints[4];
-		case LeftEyeLeftCorner:
-			return faceMarkPoints[5];
-		case RightEyeRightCorner:
-			return faceMarkPoints[6];
-		case Nose:
-			return faceMarkPoints[7];
-		default:
-			return faceMarkPoints[0];
-		}
-	}
-
-	private void marksToPoints() {
-		int x = 0;
-		for (int i = 0; i < faceMarks.length; i += 2, x++) {
-			faceMarkPoints[x] = new Point(faceMarks[i], faceMarks[i + 1]);
-		}
+	private Map<String, Point> marksToPoints(double[] faceMarks) {
+		Map<String, Point> marks = new HashMap<String, Point>();
+		
+		// left eye interest points
+		marks.put("LeftEyeLeftCorner", new Point(faceMarks[10], faceMarks[11]));
+//		marks.put("LeftEyeTopCorner", Helpers.centerOfPoints(faceMarks[22], faceMarks[23], faceMarks[24], faceMarks[25]));
+		marks.put("LeftEyeRightCorner", new Point(faceMarks[2], faceMarks[3]));
+//		marks.put("LeftEyeBottomCorner", Helpers.centerOfPoints(faceMarks[28], faceMarks[29], faceMarks[30], faceMarks[31]));
+		
+		// right eye interest points
+		marks.put("RightEyeLeftCorner", new Point(faceMarks[4], faceMarks[5]));
+//		marks.put("RightEyeTopCorner", Helpers.centerOfPoints(faceMarks[34], faceMarks[35], faceMarks[36], faceMarks[37]));
+		marks.put("RightEyeRightCorner", new Point(faceMarks[12], faceMarks[13]));
+//		marks.put("RightEyeBottomCorner", Helpers.centerOfPoints(faceMarks[40], faceMarks[41], faceMarks[42], faceMarks[43]));
+		
+		return marks;
 	}
 
 	private static int[] getBoundindBox(Rect rectangle) {
@@ -341,45 +342,7 @@ public class FaceHandler implements Runnable {
 	}
 
 	public void recalculateCoordinates() {
-//		Point leftEyeLeftCorner = this.getFaceMark(MarkPoint.LeftEyeLeftCorner);
-//		Point leftEyeRightCorner = this.getFaceMark(MarkPoint.LeftEyeRightCorder);
-//		Point rightEyeLeftCorner = this.getFaceMark(MarkPoint.RightEyeLeftCorner);
-//		Point rightEyeRightCorner = this.getFaceMark(MarkPoint.RightEyeRightCorner);
-//
-//		double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
-//		double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
-//
-//		int commonDistance = (int) (distanceLeftCorners + distanceRightCorners) / 2;
-//
-//		Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x, (int) leftEyeLeftCorner.y - commonDistance / 2,
-//				commonDistance, commonDistance);
-//
-//		Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x, (int) rightEyeLeftCorner.y - commonDistance / 2,
-//				commonDistance, commonDistance);
-//
-//		this.coordinateSystemSide = commonDistance;
-//
-//		Point coordinateLeft = null;
-//		Point coordinateRight = null;
-//		Point leftEyeLocal = this.leftEye.getAveragePoint();
-//		Point rightEyeLocal = this.rightEye.getAveragePoint();
-//
-//		if (leftEyeBall.contains(leftEyeLocal)) {
-//			coordinateLeft = new Point(leftEyeLocal.x, leftEyeLocal.y);
-//		}
-//
-//		if (rightEyeBall.contains(this.rightEye.getAveragePoint())) {
-//			coordinateRight = new Point(rightEyeLocal.x, rightEyeLocal.y);
-//		}
-//
-//		if (coordinateLeft == null && coordinateRight == null) {
-//			eyeGazeCoordinate.insertNewPoint(null);
-//		} else {
-//			eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(coordinateLeft, coordinateRight));
-//		}
-		
 		eyeGazeCoordinate.insertNewPoint(Helpers.centerOfPoints(this.leftEye.getAveragePoint(), this.rightEye.getAveragePoint()));
-
 	}
 
 	@Override
@@ -402,9 +365,27 @@ public class FaceHandler implements Runnable {
 					System.err.println("--(!) No captured frame -- Break!");
 					break;
 				}
+				
+				int frameWidth = frame.cols();
+				int frameHeight = frame.rows();
 
-				if (frame.cols() > 0 || frame.rows() > 0) {
-
+				if (frameWidth > 0 || frameHeight > 0) {
+					
+					Size size = new Size(480, 320);
+					if(frameWidth > size.width) {
+						int x = (int) (frameWidth - size.width) / 2;
+						int y = (int) (frameHeight - size.height) / 2;
+						Mat forDelete = frame;
+						frame = frame.submat(new Rect(x, y, (int)size.width, (int)size.height));
+						forDelete.release();
+					} else if(frameWidth < size.width) {
+						Mat resizedFrame = new Mat(size, frame.type());
+						Imgproc.resize(frame, resizedFrame, size);
+						frame.release();
+						frame = resizedFrame;
+					}
+					
+					
 					try {
 						this.triggerImageProcessed(HighGui.toBufferedImage(frame));
 						this.initializeFrameInformation(frame);
@@ -469,7 +450,7 @@ public class FaceHandler implements Runnable {
 			y = (int) ((bottomBound - topBound) / kY) - 1;
 		}
 		
-		Point anchored = anchorOnRect(screenWidth, screenHeight, x, y, 4, 4);
+		Point anchored = anchorOnRect(screenWidth, screenHeight, x, y, 3, 3);
 		robot.mouseMove((int) anchored.x, (int) anchored.y);
 	}
 	

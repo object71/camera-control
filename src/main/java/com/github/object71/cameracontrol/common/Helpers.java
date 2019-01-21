@@ -89,6 +89,10 @@ public class Helpers {
             return new Point((a.x + b.x) / 2, (a.y + b.y) / 2);
         }
     }
+    
+    public static Point centerOfPoints(double faceMarks, double faceMarks2, double faceMarks3, double faceMarks4) {
+        return new Point((faceMarks + faceMarks3) / 2, (faceMarks2 + faceMarks4) / 2);
+    }
 
     public static double distanceBetweenValues(double a, double b) {
         return a >= b ? a - b : b - a;

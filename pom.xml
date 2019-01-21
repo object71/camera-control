@@ -29,12 +29,12 @@
 		<dependency>
 			<groupId>org.bytedeco.javacpp-presets</groupId>
 			<artifactId>opencv-platform</artifactId>
-			<version>3.4.2-1.4.2</version>
+			<version>4.0.1-1.4.4</version>
 		</dependency>
 		<dependency>
 			<groupId>org.bytedeco.javacpp-presets</groupId>
 			<artifactId>flandmark-platform</artifactId>
-			<version>1.07-1.4.2</version>
+			<version>1.07-1.4.4</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-lang</groupId>
@@ -43,9 +43,9 @@
 		</dependency>
 		<!-- https://mvnrepository.com/artifact/com.1stleg/jnativehook -->
 		<dependency>
-		    <groupId>com.1stleg</groupId>
-		    <artifactId>jnativehook</artifactId>
-		    <version>2.0.2</version>
+			<groupId>com.1stleg</groupId>
+			<artifactId>jnativehook</artifactId>
+			<version>2.0.2</version>
 		</dependency>
 	</dependencies>
 	<repositories>

@@ -18,7 +18,7 @@ import com.github.object71.cameracontrol.common.Helpers;
 
 public class EyeHandler {
 	
-	public static Point getEyeCenter(Mat eyeRegionSubframe) {
+	public static MinMaxLocResult getEyeCenter(Mat eyeRegionSubframe) {
         
         int rows = 80;
         int cols = 80;
@@ -94,14 +94,13 @@ public class EyeHandler {
             Mat mask = floodKillEdges(floodClone);
 
             MinMaxLocResult endResult = Core.minMaxLoc(out, mask);
-
-            return endResult.maxLoc;
+            return endResult;
         }
 
         eyeRegionSubframe.release();
         sizedImage.release();
         
-        return result.maxLoc;
+        return result;
     }
 
     private static Mat floodKillEdges(Mat matrix) {
