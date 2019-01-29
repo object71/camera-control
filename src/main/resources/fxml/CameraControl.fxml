@@ -2,43 +2,71 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.ButtonBar?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
 <?import javafx.scene.text.Text?>
 
 <BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/10.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.object71.cameracontrol.CameraControlController">
    <center>
-      <ImageView id="centerImage" fx:id="centerImage" fitHeight="238.0" fitWidth="369.0" pickOnBounds="true" preserveRatio="true" BorderPane.alignment="CENTER" />
+      <TabPane prefHeight="200.0" prefWidth="200.0" tabClosingPolicy="UNAVAILABLE" BorderPane.alignment="CENTER">
+        <tabs>
+          <Tab text="Image View">
+               <content>
+                  <AnchorPane prefHeight="200.0" prefWidth="200.0">
+                     <children>
+                        <VBox prefHeight="372.0" prefWidth="600.0">
+                           <children>
+                              <ImageView id="centerImage" fx:id="centerImage" fitHeight="317.0" fitWidth="589.0" pickOnBounds="true" preserveRatio="true" VBox.vgrow="ALWAYS">
+                                 <VBox.margin>
+                                    <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+                                 </VBox.margin>
+                              </ImageView>
+                              <ButtonBar prefHeight="34.0" prefWidth="600.0">
+                                 <padding>
+                                    <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+                                 </padding>
+                                 <buttons>
+                                    <ToggleButton id="processButton" fx:id="processButton" mnemonicParsing="false" onAction="#startProcess" text="Process" />
+                                    <ToggleButton fx:id="mouseCalibration" mnemonicParsing="false" onAction="#calibrateOnMouseClick" text="Mouse Calibration" />
+                                    <ToggleButton fx:id="mouseMoveButton" mnemonicParsing="false" onAction="#controlMouse" text="Move Mouse" />
+                                 </buttons>
+                              </ButtonBar>
+                           </children>
+                        </VBox>
+                     </children>
+                  </AnchorPane>
+               </content>
+          </Tab>
+          <Tab text="Options">
+            <content>
+              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
+                     <children>
+                        <VBox layoutY="14.0" prefHeight="356.0" prefWidth="600.0">
+                           <children>
+                              <Text strokeType="OUTSIDE" strokeWidth="0.0" text="To use this program:&#10;&#10;1. Start by clicking the button process&#10;2. On the log on the left wait for the camera to detect your gaze relative coordinates.&#10;3. Click on mouse calibration and then click a few times (while looking there) on the top left and bottom right corners of your screen.&#10;4. Click on move mouse to start using the prgoram." wrappingWidth="580.8359375">
+                                 <font>
+                                    <Font name="Monospaced Regular" size="11.0" />
+                                 </font>
+                              </Text>
+                              <TextArea fx:id="logArea" editable="false" prefHeight="222.0" prefWidth="167.0" />
+                              <Label text="Brightness" />
+                              <Slider fx:id="brightnessSlider" blockIncrement="5.0" max="255.0" />
+                           </children>
+                        </VBox>
+                     </children>
+                  </AnchorPane>
+            </content>
+          </Tab>
+        </tabs>
+      </TabPane>
    </center>
-   <bottom>
-      <ButtonBar prefHeight="34.0" prefWidth="600.0" BorderPane.alignment="CENTER">
-         <buttons>
-            <ToggleButton id="processButton" fx:id="processButton" mnemonicParsing="false" onAction="#startProcess" text="Process" />
-            <ToggleButton fx:id="mouseCalibration" mnemonicParsing="false" onAction="#calibrateOnMouseClick" text="Mouse Calibration" />
-            <ToggleButton fx:id="mouseMoveButton" mnemonicParsing="false" onAction="#controlMouse" text="Move Mouse" />
-         </buttons>
-         <BorderPane.margin>
-            <Insets top="5.0" />
-         </BorderPane.margin>
-         <padding>
-            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
-         </padding>
-      </ButtonBar>
-   </bottom>
-   <left>
-      <TextArea fx:id="logArea" editable="false" prefHeight="200.0" prefWidth="200.0" BorderPane.alignment="CENTER" />
-   </left>
-   <top>
-      <Text strokeType="OUTSIDE" strokeWidth="0.0" text="To use this program:&#10;&#10;1. Start by clicking the button process&#10;2. On the log on the left wait for the camera to detect your gaze relative coordinates.&#10;3. Click on mouse calibration and then click a few times (while looking there) on the top left and bottom right corners of your screen.&#10;4. Click on move mouse to start using the prgoram." wrappingWidth="580.8359375" BorderPane.alignment="CENTER">
-         <BorderPane.margin>
-            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
-         </BorderPane.margin>
-         <font>
-            <Font name="Monospaced Regular" size="11.0" />
-         </font>
-      </Text>
-   </top>
 </BorderPane>

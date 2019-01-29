@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage;
 import java.net.URL;
 import java.util.ResourceBundle;
 
-import org.opencv.core.Point;
+import org.bytedeco.javacpp.opencv_core.Point;
 
 import com.github.object71.cameracontrol.common.ImageProcessedListener;
 import com.github.object71.cameracontrol.models.FaceHandler;
@@ -13,6 +13,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
@@ -25,7 +26,12 @@ public class CameraControlController implements Initializable, ImageProcessedLis
 
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
+		
+		brightnessSlider.valueProperty().addListener((observable, oldValue, newValue) -> {
+			face.brightnessValue = (double) newValue;
+		});
 		face.startThread();
+		
 	}
 	
 	public CameraControlController() {
@@ -56,6 +62,9 @@ public class CameraControlController implements Initializable, ImageProcessedLis
     private ToggleButton processButton;
     
     @FXML
+    private Slider brightnessSlider;
+    
+    @FXML
     private TextArea logArea;
     
     @FXML
@@ -78,7 +87,7 @@ public class CameraControlController implements Initializable, ImageProcessedLis
 		String log = "";
 		Point gaze = face.eyeGazeCoordinate.getAveragePoint();
 		if(gaze != null) {
-			log += "Cooridnate is (" +  gaze.x + "," + gaze.y + ") \n";
+			log += "Cooridnate is (" +  gaze.x() + "," + gaze.y() + ") \n";
 		}
 		log += "\nleft: " + face.leftBound + "\nright: " + face.rightBound + "\ntop: " + face.topBound + "\nbottom: " + face.bottomBound + "\n";
 		logArea.setText(log);

@@ -5,7 +5,7 @@
  */
 package com.github.object71.cameracontrol.common;
 
-import org.opencv.core.Point;
+import org.bytedeco.javacpp.opencv_core.Point;
 
 /**
  *
@@ -29,10 +29,10 @@ public class PointHistoryCollection {
 			}
 
 			if (result == null) {
-				result = new Point(point.x, point.y);
+				result = new Point(point.x(), point.y());
 			} else {
-				result.x = (result.x + point.x) / 2;
-				result.y = (result.y + point.y) / 2;
+				result.x((result.x() + point.x()) / 2);
+				result.y((result.y() + point.y()) / 2);
 			}
 		}
 
