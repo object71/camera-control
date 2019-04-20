@@ -15,6 +15,8 @@ import org.bytedeco.javacpp.indexer.Indexer;
 
 import static org.bytedeco.javacpp.opencv_core.*;
 
+import java.awt.image.BufferedImage;
+
 /**
  *
  * @author hristo
@@ -49,6 +51,10 @@ public class Helpers {
 
 	public static boolean isPointInMatrix(Point point, int rows, int cols) {
 		return point.x() >= 0 && point.x() < cols && point.y() >= 0 && point.y() < rows;
+	}
+	
+	public static boolean isPointInMatrix(int x, int y, int rows, int cols) {
+		return x >= 0 && x < cols && y >= 0 && y < rows;
 	}
 
 	public static double computeDynamicTreshold(double[] matrix, double standardDeviationFactor, int rows, int cols) {
@@ -184,10 +190,10 @@ public class Helpers {
 		int rows = matrix.rows();
 		int cols = matrix.cols();
 		double[] result = new double[rows * cols];
-		try (DoubleIndexer matrixIndexer = matrix.createIndexer()) {
+		try (Indexer matrixIndexer = matrix.createIndexer()) {
 			for (int y = 0; y < rows; y++) {
 				for (int x = 0; x < cols; x++) {
-					result[y * cols + x] = matrixIndexer.get(y, x, 0);
+					result[y * cols + x] = matrixIndexer.getDouble(y, x, 0);
 
 				}
 			}
@@ -214,19 +220,41 @@ public class Helpers {
 
 		return result;
 	}
-
-	public static void bright(Mat matrix, double brightenBy) {
-		for (int y = 0; y < matrix.rows(); y++) {
-			for (int x = 0; x < matrix.cols(); x++) {
-				DoubleIndexer matrixIndexer = matrix.createIndexer();
-				double[] values = (double[]) matrixIndexer.array();
-
-				for (int v = 0; v < values.length; v++) {
-					double value = matrixIndexer.get((long) y, (long) x, (long) v) + brightenBy;
-					matrixIndexer.put((long) y, (long) x, (long) v, value > 255 ? 255 : value);
-				}
+	
+	public static BufferedImage toBufferedImage(Mat matrix) {
+		int width = matrix.cols();
+		int height = matrix.rows();
+		
+		BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				Indexer matrixIndexer = matrix.createIndexer();
+				
+				int a = 255;
+				int r = (int)matrixIndexer.getDouble((long) y, (long) x, (long) 2);
+				int g = (int)matrixIndexer.getDouble((long) y, (long) x, (long) 1);
+				int b = (int)matrixIndexer.getDouble((long) y, (long) x, (long) 0);
+				
+				int p = (a<<24) | (r<<16) | (g<<8) | b;
+				result.setRGB(x, y, p);
 			}
 		}
+		
+		return result;
+	}
+
+	public static void bright(Mat matrix, double brightenBy) {
+//		for (int y = 0; y < matrix.rows(); y++) {
+//			for (int x = 0; x < matrix.cols(); x++) {
+//				Indexer matrixIndexer = matrix.createIndexer();
+//
+//				for (int v = 0; v < matrixIndexer.channels(); v++) {
+//					double value = matrixIndexer.getDouble((long) y, (long) x, (long) v) + brightenBy;
+//					matrixIndexer.putDouble(new long[] { (long) y, (long) x, (long) v }, value > 255 ? 255 : value);
+//				}
+//			}
+//		}
 	}
 
 	public static void possibleCenterFormula(int x, int y, Mat weight, double gx, double gy, Mat output) {
@@ -245,20 +273,20 @@ public class Helpers {
 
 				double dotProduct = Math.max(0, dx * gx + dy * gy);
 
-				try (DoubleIndexer outputIndexer = output.createIndexer()) {
+				try (Indexer outputIndexer = output.createIndexer()) {
 
-					double currentValue = outputIndexer.get(cy, cx, 0);
+					double currentValue = outputIndexer.getDouble(cy, cx, 0);
 
 					if (Constants.enableWeight) {
-						try (DoubleIndexer weightIndexer = output.createIndexer()) {
-							double weightValue = weightIndexer.get(cy, cx, 0);
-							outputIndexer.put(cy, cx,
+						try (Indexer weightIndexer = output.createIndexer()) {
+							double weightValue = weightIndexer.getDouble(cy, cx, 0);
+							outputIndexer.putDouble(new long[] { cy, cx },
 									currentValue + (Math.pow(dotProduct, 2) * (weightValue / Constants.weightDivisor)));
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
 					} else {
-						outputIndexer.put(cy, cx, currentValue + Math.pow(dotProduct, 2));
+						outputIndexer.putDouble(new long[] { cy, cx }, currentValue + Math.pow(dotProduct, 2));
 					}
 				} catch (Exception e) {
 					e.printStackTrace();

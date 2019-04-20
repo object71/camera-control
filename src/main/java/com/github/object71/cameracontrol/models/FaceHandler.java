@@ -58,8 +58,8 @@ public class FaceHandler implements Runnable {
 	private Tracker faceTracker;
 	private Rect2d trackedFace;
 
-	public PointHistoryCollection leftEye = new PointHistoryCollection(3);
-	public PointHistoryCollection rightEye = new PointHistoryCollection(3);
+	public PointHistoryCollection historyLEP = new PointHistoryCollection(3);
+	public PointHistoryCollection historyREP = new PointHistoryCollection(3);
 
 	public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(2);
 	public double coordinateSystemSide = 80;
@@ -94,8 +94,9 @@ public class FaceHandler implements Runnable {
 				.toString().replace("file:/", ""));
 
 		facemark = FacemarkKazemi.create();
-		//facemark = FacemarkLBF.create();
-		facemark.loadModel(FaceHandler.class.getClassLoader().getResource("data/face_landmark_model.dat").toString().replace("file:/", ""));
+		// facemark = FacemarkLBF.create();
+		facemark.loadModel(FaceHandler.class.getClassLoader().getResource("data/face_landmark_model.dat").toString()
+				.replace("file:/", ""));
 	}
 
 	public FaceHandler() {
@@ -162,43 +163,60 @@ public class FaceHandler implements Runnable {
 		}
 	}
 
-	public void initializeFrameInformation(Mat inputFrame) {
+	public void processFrame(Mat inputFrame) {
 
 		if (inputFrame == null || inputFrame.empty()) {
-			leftEye.insertNewPoint(null);
-			rightEye.insertNewPoint(null);
-			eyeGazeCoordinate.insertNewPoint(null);
-
-			inputFrame.release();
+			breakProcessCleanup(inputFrame);
 			return;
 		}
 
+		Mat frame = modifyFrame(inputFrame);
+
+		if (frame.empty()) {
+			breakProcessCleanup(inputFrame);
+			return;
+		}
+
+		Rect faceLocation = locateFace(inputFrame, frame);
+
+		if (faceLocation == null) {
+			breakProcessCleanup(inputFrame);
+			return;
+		}
+
+		Point2fVectorVector faceMarks = new Point2fVectorVector();
+		if (facemark.fit(frame, new RectVector(faceLocation), faceMarks)) {
+			processEyes(frame, faceMarks);
+		}
+		
+		inputFrame.release();
+		frame.release();
+	}
+
+	private Mat modifyFrame(Mat inputFrame) {
 		flip(inputFrame, inputFrame, 1);
 
 		Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CV_64F);
 
 		cvtColor(inputFrame, frame, COLOR_BGR2GRAY);
 		equalizeHist(frame, frame);
+		return frame;
+	}
 
-		if (frame.empty()) {
-			leftEye.insertNewPoint(null);
-			rightEye.insertNewPoint(null);
-			eyeGazeCoordinate.insertNewPoint(null);
+	private void breakProcessCleanup(Mat inputFrame) {
+		historyLEP.insertNewPoint(null);
+		historyREP.insertNewPoint(null);
+		eyeGazeCoordinate.insertNewPoint(null);
 
-			inputFrame.release();
-			return;
-		}
+		inputFrame.release();
+	}
 
+	private Rect locateFace(Mat inputFrame, Mat frame) {
 		Rect faceLocation = null;
 		if (faceTracker == null) {
 			faceLocation = this.getFaceLocation(frame);
 			if (faceLocation == null) {
-				leftEye.insertNewPoint(null);
-				rightEye.insertNewPoint(null);
-				eyeGazeCoordinate.insertNewPoint(null);
-
-				inputFrame.release();
-				return;
+				return faceLocation;
 			}
 
 			trackedFace = Helpers.RectToRect2d(faceLocation);
@@ -211,98 +229,96 @@ public class FaceHandler implements Runnable {
 			} else {
 				faceLocation = this.getFaceLocation(frame);
 				if (faceLocation == null) {
-					leftEye.insertNewPoint(null);
-					rightEye.insertNewPoint(null);
-					eyeGazeCoordinate.insertNewPoint(null);
-
-					inputFrame.release();
-					return;
+					return faceLocation;
 				}
 
 				trackedFace = Helpers.RectToRect2d(faceLocation);
 				faceTracker.init(inputFrame, trackedFace);
 			}
 		}
+		return faceLocation;
+	}
 
-		if (faceLocation == null) {
-			leftEye.insertNewPoint(null);
-			rightEye.insertNewPoint(null);
-			eyeGazeCoordinate.insertNewPoint(null);
-
-			inputFrame.release();
-			return;
+	private void processEyes(Mat frame, Point2fVectorVector faceMarks) {
+		Point2fVector firstFace = faceMarks.get(0);
+		Point[] points = new Point[(int) firstFace.size()];
+		for (int i = 0; i < firstFace.size(); i++) {
+			points[i] = new Point((int) firstFace.get(i).x(), (int) firstFace.get(i).y());
 		}
 
-		Point2fVectorVector faceMarks = new Point2fVectorVector();
-		if (facemark.fit(frame, new RectVector(faceLocation), faceMarks)) {
+		EyeModel leftEye = new EyeModel();
+		EyeModel rightEye = new EyeModel();
+		
+		initializeEyeModels(points, leftEye, rightEye);
+		registerEyeCenters(frame, leftEye, rightEye);
+		processBlinks(leftEye.getIsBlinking(), rightEye.getIsBlinking());
 
-			Point2fVector firstFace = faceMarks.get(0);
-			Point[] points = new Point[(int) firstFace.size()];
-			for (int i = 0; i < firstFace.size(); i++) {
-				points[i] = new Point((int) firstFace.get(i).x(), (int) firstFace.get(i).y());
-			}
+		this.recalculateCoordinates();
+	}
 
-			// left eye interest points
-			Point leftEyeLeftCorner = points[36];
-			Point leftEyeTopCorner = Helpers.centerOfPoints(points[37], points[38]);
-			Point leftEyeRightCorner = points[39];
-			Point leftEyeBottomCorner = Helpers.centerOfPoints(points[40], points[41]);
+	private void registerEyeCenters(Mat frame, EyeModel leftEye, EyeModel rightEye) {
+		Rect leftEyeBall = new Rect((int) leftEye.leftCorner.x(), (int) leftEye.topCorner.y(),
+				(int) leftEye.getCornersDistance(), (int) leftEye.getLidsDistance());
 
-			// right eye interest points
-			Point rightEyeLeftCorner = points[42];
-			Point rightEyeTopCorner = Helpers.centerOfPoints(points[43], points[44]);
-			Point rightEyeRightCorner = points[45];
-			Point rightEyeBottomCorner = Helpers.centerOfPoints(points[46], points[47]);
+		Rect rightEyeBall = new Rect((int) rightEye.leftCorner.x(), (int) rightEye.topCorner.y(),
+				(int) rightEye.getCornersDistance(), (int) rightEye.getLidsDistance());
 
-			double distanceLeftCorners = Helpers.distanceBetweenPoints(leftEyeLeftCorner, leftEyeRightCorner);
-			double distanceLeftEyeLids = Helpers.distanceBetweenPoints(leftEyeTopCorner, leftEyeBottomCorner);
-			double distanceRightCorners = Helpers.distanceBetweenPoints(rightEyeLeftCorner, rightEyeRightCorner);
-			double distanceRightEyeLids = Helpers.distanceBetweenPoints(rightEyeTopCorner, rightEyeBottomCorner);
+		Point leftEyeResult = EyeHandler.getEyeCenter(frame.apply(leftEyeBall));
+		Point rightEyeResult = EyeHandler.getEyeCenter(frame.apply(rightEyeBall));
 
-			Rect leftEyeBall = new Rect((int) leftEyeLeftCorner.x(), (int) leftEyeTopCorner.y(),
-					(int) distanceLeftCorners, (int) distanceLeftEyeLids);
+		Point leftEyeCenter = null;
+		if (!leftEye.getIsBlinking()) {
+			leftEyeCenter = leftEyeResult;
+		}
+		this.historyLEP.insertNewPoint(leftEyeCenter);
 
-			Rect rightEyeBall = new Rect((int) rightEyeLeftCorner.x(), (int) rightEyeTopCorner.y(),
-					(int) distanceRightCorners, (int) distanceRightEyeLids);
+		Point rightEyeCenter = null;
+		if (!rightEye.getIsBlinking()) {
+			rightEyeCenter = rightEyeResult;
+		}
+		this.historyREP.insertNewPoint(rightEyeCenter);
+	}
 
-			Point leftEyeResult = EyeHandler.getEyeCenter(frame.apply(leftEyeBall));
-			Point rightEyeResult = EyeHandler.getEyeCenter(frame.apply(rightEyeBall));
+	private void initializeEyeModels(Point[] points, EyeModel leftEye, EyeModel rightEye) {
+		// left eye interest points
+		leftEye.leftCorner = points[36];
+		leftEye.topCorner = Helpers.centerOfPoints(points[37], points[38]);
+		leftEye.rightCorner = points[39];
+		leftEye.bottomCorner = Helpers.centerOfPoints(points[40], points[41]);
 
-			boolean isLeftEyeBlinking = false;
-			boolean isRightEyeBlinking = false;
+		// right eye interest points
+		rightEye.leftCorner = points[42];
+		rightEye.topCorner = Helpers.centerOfPoints(points[43], points[44]);
+		rightEye.rightCorner = points[45];
+		rightEye.bottomCorner = Helpers.centerOfPoints(points[46], points[47]);
+	}
 
-			Point leftEyeCenter = null;
-			if (!isLeftEyeBlinking) {
-				leftEyeCenter = leftEyeResult;
-			}
-			this.leftEye.insertNewPoint(leftEyeCenter);
-
-			Point rightEyeCenter = null;
-			if (!isRightEyeBlinking) {
-				rightEyeCenter = rightEyeResult;
-			}
-			this.rightEye.insertNewPoint(rightEyeCenter);
-
-			if (controlMouse && isLeftEyeBlinking && !isRightEyeBlinking) {
+	private void processBlinks(boolean isLeftEyeBlinking, boolean isRightEyeBlinking) {
+		if (controlMouse && isLeftEyeBlinking && !isRightEyeBlinking) {
+			LOGGER.log(Level.INFO, "Left click");
+			if (controlMouse) {
 				int defaultAutoEvent = robot.getAutoDelay();
 				robot.setAutoDelay(200);
 				robot.mousePress(InputEvent.BUTTON1_MASK);
 				robot.mouseRelease(InputEvent.BUTTON1_MASK);
 				robot.setAutoDelay(defaultAutoEvent);
 			}
+		}
 
-			if (controlMouse && isRightEyeBlinking && !isLeftEyeBlinking) {
+		if (isRightEyeBlinking && !isLeftEyeBlinking) {
+			LOGGER.log(Level.INFO, "Right click");
+			if (controlMouse) {
 				int defaultAutoEvent = robot.getAutoDelay();
 				robot.setAutoDelay(200);
-				robot.mousePress(InputEvent.BUTTON2_MASK);
-				robot.mouseRelease(InputEvent.BUTTON2_MASK);
+				robot.mousePress(InputEvent.BUTTON3_MASK);
+				robot.mouseRelease(InputEvent.BUTTON3_MASK);
 				robot.setAutoDelay(defaultAutoEvent);
 			}
-
-			this.recalculateCoordinates();
 		}
-		inputFrame.release();
-		frame.release();
+
+		if (isRightEyeBlinking && isLeftEyeBlinking) {
+			LOGGER.log(Level.INFO, "Normal blink");
+		}
 	}
 
 	private static int[] getBoundindBox(Rect rectangle) {
@@ -343,7 +359,7 @@ public class FaceHandler implements Runnable {
 
 	public void recalculateCoordinates() {
 		eyeGazeCoordinate.insertNewPoint(
-				Helpers.centerOfPoints(this.leftEye.getAveragePoint(), this.rightEye.getAveragePoint()));
+				Helpers.centerOfPoints(this.historyLEP.getAveragePoint(), this.historyREP.getAveragePoint()));
 	}
 
 	@Override
@@ -356,58 +372,12 @@ public class FaceHandler implements Runnable {
 				System.exit(0);
 			}
 
-			Mat frame = new Mat();
+			
 
-			boolean running = capture.read(frame);
-			while (running && !closing) {
+			boolean running = true;
+			do {
 				if (process) {
-
-					if (frame.empty()) {
-						LOGGER.log(Level.SEVERE, "--(!) No captured frame -- Break!");
-						break;
-					}
-
-					int frameWidth = frame.cols();
-					int frameHeight = frame.rows();
-
-					if (frameWidth > 0 || frameHeight > 0) {
-
-						Helpers.bright(frame, brightnessValue);
-
-						Size size = new Size(480, 320);
-						if (frameWidth > size.width()) {
-							int x = (int) (frameWidth - size.width()) / 2;
-							int y = (int) (frameHeight - size.height()) / 2;
-							Mat forDelete = frame;
-							frame = frame.apply(new Rect(x, y, (int) size.width(), (int) size.height()));
-							forDelete.release();
-						} else if (frameWidth < size.width()) {
-							Mat resizedFrame = new Mat(size, frame.type());
-							resize(frame, resizedFrame, size);
-							frame.release();
-							frame = resizedFrame;
-						}
-
-						try {
-//							this.triggerImageProcessed(toBufferedImage(frame));
-							this.initializeFrameInformation(frame);
-						} catch (Exception e) {
-							System.out.println(e.getMessage());
-						}
-
-					}
-					frame.release();
-					System.gc();
-
-					if (controlMouse) {
-						this.moveMouse();
-					}
-
-					try {
-						running = capture.read(frame);
-					} catch (Exception e) {
-
-					}
+					running = eyeControlProcess(capture);
 				}
 
 				try {
@@ -415,12 +385,75 @@ public class FaceHandler implements Runnable {
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			}
+			} while (running && !closing);
 		}
 	}
 
-	public void moveMouse() {
+	private boolean eyeControlProcess(VideoCapture capture) {
+		boolean running;
+		Mat frame = new Mat();
+		running = capture.read(frame);
+		
+		if (!running || frame.empty()) {
+			LOGGER.log(Level.SEVERE, "--(!) No captured frame -- Break!");
+			throw new RuntimeException("No more frame");
+		}
 
+		int frameWidth = frame.cols();
+		int frameHeight = frame.rows();
+
+		if (frameWidth > 0 || frameHeight > 0) {
+
+			frame = commonFrameRefactor(frame, frameWidth, frameHeight);
+
+			try {
+				this.triggerImageProcessed(Helpers.toBufferedImage(frame));
+				this.processFrame(frame);
+			} catch (Exception e) {
+				LOGGER.log(Level.SEVERE, e.getMessage());
+			}
+
+		}
+		
+		frame.release();
+		System.gc();
+
+		if (controlMouse) {
+			this.moveMouse();
+		}
+		return running;
+	}
+
+	private Mat commonFrameRefactor(Mat frame, int frameWidth, int frameHeight) {
+		Helpers.bright(frame, brightnessValue);
+
+		Size size = new Size(640, 480);
+		if (frameWidth > size.width()) {
+			int x = (int) (frameWidth - size.width()) / 2;
+			int y = (int) (frameHeight - size.height()) / 2;
+			Mat forDelete = frame;
+			frame = frame.apply(new Rect(x, y, (int) size.width(), (int) size.height()));
+			forDelete.release();
+		} else if (frameWidth < size.width()) {
+			Mat resizedFrame = new Mat(size, frame.type());
+			resize(frame, resizedFrame, size);
+			frame.release();
+			frame = resizedFrame;
+		}
+		return frame;
+	}
+
+	public void moveMouse() {
+		Point anchored = calculateAnchoredPoint();
+
+		if (anchored == null) {
+			return;
+		}
+
+		robot.mouseMove((int) anchored.x(), (int) anchored.y());
+	}
+
+	private Point calculateAnchoredPoint() {
 		Dimension screenDimensions = toolkit.getScreenSize();
 
 		double screenWidth = screenDimensions.getWidth();
@@ -428,31 +461,31 @@ public class FaceHandler implements Runnable {
 
 		double kX = (rightBound - leftBound) / screenWidth;
 		double kY = (bottomBound - topBound) / screenHeight;
-
-		int x = 0;
-		int y = 0;
-
 		Point coord = this.eyeGazeCoordinate.getAveragePoint();
-
 		if (coord == null) {
-			return;
+			return null;
 		}
 
+		return validateBounds(screenWidth, screenHeight, kX, kY, coord);
+	}
+
+	private Point validateBounds(double screenWidth, double screenHeight, double kX, double kY, Point coord) {
+		Point anchored = new Point();
+
 		if (coord.x() > leftBound && coord.x() < rightBound && coord.y() > topBound && coord.y() < bottomBound) {
-			x = (int) ((coord.x() - leftBound) / kX);
-			y = (int) ((coord.y() - topBound) / kY);
+			anchored.x((int) ((coord.x() - leftBound) / kX));
+			anchored.y((int) ((coord.y() - topBound) / kY));
 		}
 
 		if (coord.x() > rightBound) {
-			x = (int) ((rightBound - leftBound) / kX) - 1;
+			anchored.x((int) ((rightBound - leftBound) / kX) - 1);
 		}
 
 		if (coord.y() > bottomBound) {
-			y = (int) ((bottomBound - topBound) / kY) - 1;
+			anchored.y((int) ((bottomBound - topBound) / kY) - 1);
 		}
 
-		Point anchored = anchorOnRect(screenWidth, screenHeight, x, y, 3, 3);
-		robot.mouseMove((int) anchored.x(), (int) anchored.y());
+		return anchorOnRect(screenWidth, screenHeight, anchored.x(), anchored.y(), 2, 3);
 	}
 
 	private Point anchorOnRect(double width, double height, double x, double y, int rows, int cols) {
@@ -471,7 +504,7 @@ public class FaceHandler implements Runnable {
 
 	public void startThread() {
 		if (currentThread != null) {
-			System.out.println("Thread already running");
+			LOGGER.log(Level.WARNING, "Thread already running");
 			return;
 		}
 
