@@ -3,9 +3,10 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.github.object71.cameracontrol.models;
+package com.github.object71.cameracontrol.services;
 
 import com.github.object71.cameracontrol.common.Helpers;
+import com.github.object71.cameracontrol.models.EyeModel;
 import com.github.object71.cameracontrol.common.ImageProcessedListener;
 import com.github.object71.cameracontrol.common.PointHistoryCollection;
 
@@ -15,19 +16,14 @@ import java.awt.Image;
 import java.awt.Robot;
 import java.awt.Toolkit;
 import java.awt.event.InputEvent;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.opencv_core.Point;
 import org.bytedeco.javacpp.opencv_core.Rect2d;
 import org.bytedeco.javacpp.opencv_face.Facemark;
 import org.bytedeco.javacpp.opencv_face.FacemarkKazemi;
-import org.bytedeco.javacpp.opencv_face.FacemarkLBF;
 import org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier;
 import org.bytedeco.javacpp.opencv_tracking.Tracker;
 import org.bytedeco.javacpp.opencv_tracking.TrackerBoosting;
@@ -39,19 +35,17 @@ import org.jnativehook.mouse.NativeMouseListener;
 import static org.bytedeco.javacpp.opencv_imgproc.*;
 import static org.bytedeco.javacpp.opencv_core.*;
 import static org.bytedeco.javacpp.opencv_objdetect.*;
-import static org.bytedeco.javacpp.opencv_highgui.*;
 
 /**
  *
  * @author hristo
  */
-public class FaceHandler implements Runnable {
+public class FaceService implements Runnable {
 
-	private final static Logger LOGGER = Logger.getLogger(FaceHandler.class.getName());
+	private final static Logger LOGGER = Logger.getLogger(FaceService.class.getName());
 
 	private static CascadeClassifier faceCascade;
 	private static Facemark facemark;
-//	private static FLANDMARK_Model model;
 	private static Toolkit toolkit = Toolkit.getDefaultToolkit();
 	private static Robot robot;
 
@@ -90,16 +84,16 @@ public class FaceHandler implements Runnable {
 
 	static {
 		faceCascade = new CascadeClassifier();
-		faceCascade.load(FaceHandler.class.getClassLoader().getResource("data/haarcascade_frontalface_alt.xml")
-				.toString().replace("file:/", ""));
+		faceCascade.load(FaceService.class.getClassLoader().getResource("data/haarcascade_frontalface_alt.xml")
+				.toString().replace("file:", ""));
 
 		facemark = FacemarkKazemi.create();
 		// facemark = FacemarkLBF.create();
-		facemark.loadModel(FaceHandler.class.getClassLoader().getResource("data/face_landmark_model.dat").toString()
-				.replace("file:/", ""));
+		facemark.loadModel(FaceService.class.getClassLoader().getResource("data/face_landmark_model.dat").toString()
+				.replace("file:", ""));
 	}
 
-	public FaceHandler() {
+	public FaceService() {
 
 		currentThread = null;
 		process = false;
@@ -194,7 +188,7 @@ public class FaceHandler implements Runnable {
 	}
 
 	private Mat modifyFrame(Mat inputFrame) {
-		flip(inputFrame, inputFrame, 1);
+		// flip(inputFrame, inputFrame, 1);
 
 		Mat frame = new Mat(inputFrame.rows(), inputFrame.cols(), CV_64F);
 
@@ -263,8 +257,8 @@ public class FaceHandler implements Runnable {
 		Rect rightEyeBall = new Rect((int) rightEye.leftCorner.x(), (int) rightEye.topCorner.y(),
 				(int) rightEye.getCornersDistance(), (int) rightEye.getLidsDistance());
 
-		Point leftEyeResult = EyeHandler.getEyeCenter(frame.apply(leftEyeBall));
-		Point rightEyeResult = EyeHandler.getEyeCenter(frame.apply(rightEyeBall));
+		Point leftEyeResult = EyeService.getEyeCenter(frame.apply(leftEyeBall));
+		Point rightEyeResult = EyeService.getEyeCenter(frame.apply(rightEyeBall));
 
 		Point leftEyeCenter = null;
 		if (!leftEye.getIsBlinking()) {
@@ -299,8 +293,8 @@ public class FaceHandler implements Runnable {
 			if (controlMouse) {
 				int defaultAutoEvent = robot.getAutoDelay();
 				robot.setAutoDelay(200);
-				robot.mousePress(InputEvent.BUTTON1_MASK);
-				robot.mouseRelease(InputEvent.BUTTON1_MASK);
+				robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
+				robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
 				robot.setAutoDelay(defaultAutoEvent);
 			}
 		}
@@ -310,8 +304,8 @@ public class FaceHandler implements Runnable {
 			if (controlMouse) {
 				int defaultAutoEvent = robot.getAutoDelay();
 				robot.setAutoDelay(200);
-				robot.mousePress(InputEvent.BUTTON3_MASK);
-				robot.mouseRelease(InputEvent.BUTTON3_MASK);
+				robot.mousePress(InputEvent.BUTTON3_DOWN_MASK);
+				robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK);
 				robot.setAutoDelay(defaultAutoEvent);
 			}
 		}
@@ -319,12 +313,6 @@ public class FaceHandler implements Runnable {
 		if (isRightEyeBlinking && isLeftEyeBlinking) {
 			LOGGER.log(Level.INFO, "Normal blink");
 		}
-	}
-
-	private static int[] getBoundindBox(Rect rectangle) {
-		int[] bbox = new int[] { rectangle.x(), rectangle.y(), rectangle.x() + rectangle.width(),
-				rectangle.y() + rectangle.height() };
-		return bbox;
 	}
 
 	private Rect getFaceLocation(Mat frame) {
@@ -383,7 +371,7 @@ public class FaceHandler implements Runnable {
 				try {
 					Thread.sleep(10);
 				} catch (InterruptedException e) {
-					e.printStackTrace();
+					LOGGER.log(Level.WARNING, e.getMessage());
 				}
 			} while (running && !closing);
 		}
@@ -484,8 +472,9 @@ public class FaceHandler implements Runnable {
 		if (coord.y() > bottomBound) {
 			anchored.y((int) ((bottomBound - topBound) / kY) - 1);
 		}
-
-		return anchorOnRect(screenWidth, screenHeight, anchored.x(), anchored.y(), 2, 3);
+		
+		anchored = anchorOnRect(screenWidth, screenHeight, anchored.x(), anchored.y(), 3, 3);
+		return anchored;
 	}
 
 	private Point anchorOnRect(double width, double height, double x, double y, int rows, int cols) {

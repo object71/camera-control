@@ -1,23 +1,21 @@
-package com.github.object71.cameracontrol.models;
+package com.github.object71.cameracontrol.services;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
 import com.github.object71.cameracontrol.common.Constants;
-import com.github.object71.cameracontrol.common.GradientsModel;
+import com.github.object71.cameracontrol.models.GradientsModel;
 import com.github.object71.cameracontrol.common.Helpers;
 
 import org.bytedeco.javacpp.DoublePointer;
-import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.opencv_core.Mat;
 import org.bytedeco.javacpp.opencv_core.Size;
-import org.bytedeco.javacpp.indexer.DoubleIndexer;
 import org.bytedeco.javacpp.indexer.Indexer;
 
 import static org.bytedeco.javacpp.opencv_imgproc.*;
 import static org.bytedeco.javacpp.opencv_core.*;
 
-public class EyeHandler {
+public class EyeService {
 
 	public static Point getEyeCenter(Mat eyeRegionSubframe) {
 		if (eyeRegionSubframe.rows() < 3 || eyeRegionSubframe.cols() < 3) {

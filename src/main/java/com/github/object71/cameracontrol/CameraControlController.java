@@ -7,7 +7,7 @@ import java.util.ResourceBundle;
 import org.bytedeco.javacpp.opencv_core.Point;
 
 import com.github.object71.cameracontrol.common.ImageProcessedListener;
-import com.github.object71.cameracontrol.models.FaceHandler;
+import com.github.object71.cameracontrol.services.FaceService;
 
 import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
@@ -22,7 +22,7 @@ import javafx.scene.image.WritableImage;
 
 public class CameraControlController implements Initializable, ImageProcessedListener {
 	
-	private FaceHandler face;
+	private FaceService face;
 
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
@@ -35,7 +35,7 @@ public class CameraControlController implements Initializable, ImageProcessedLis
 	}
 	
 	public CameraControlController() {
-		face = new FaceHandler();
+		face = new FaceService();
 		face.registerImageProcessedListener(this);
 	}
 	

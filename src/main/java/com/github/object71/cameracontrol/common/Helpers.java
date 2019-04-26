@@ -13,6 +13,8 @@ import org.bytedeco.javacpp.opencv_core.Rect2d;
 import org.bytedeco.javacpp.indexer.DoubleIndexer;
 import org.bytedeco.javacpp.indexer.Indexer;
 
+import com.github.object71.cameracontrol.models.GradientsModel;
+
 import static org.bytedeco.javacpp.opencv_core.*;
 
 import java.awt.image.BufferedImage;
