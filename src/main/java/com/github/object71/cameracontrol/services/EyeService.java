@@ -18,6 +18,7 @@ import static org.bytedeco.javacpp.opencv_core.*;
 public class EyeService {
 
 	public static Point getEyeCenter(Mat eyeRegionSubframe) {
+		
 		if (eyeRegionSubframe.rows() < 3 || eyeRegionSubframe.cols() < 3) {
 			return null;
 		}
@@ -26,18 +27,15 @@ public class EyeService {
 		int cols = 80;
 
 		Mat sizedImage = resizeImage(eyeRegionSubframe, rows, cols);
-
 		double[] frameAsDoubles = Helpers.matrixToArray(sizedImage);
 
 		GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
 
-		Mat weight = new Mat(rows, cols, CV_64F);
-
 		double[] sum = new double[rows * cols];
-		double[] weightArray = Helpers.matrixToArray(weight);
+		double[] weightArray = new double[rows * cols];
 
-		for (int y = 0; y < weight.rows(); y++) {
-			for (int x = 0; x < weight.cols(); x++) {
+		for (int y = 0; y < rows; y++) {
+			for (int x = 0; x < cols; x++) {
 				calculatePointGradientValue(rows, cols, gradients, sum, weightArray, y, x);
 			}
 		}
