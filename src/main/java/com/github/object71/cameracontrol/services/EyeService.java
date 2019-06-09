@@ -32,11 +32,10 @@ public class EyeService {
 		GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
 
 		double[] sum = new double[rows * cols];
-		double[] weightArray = new double[rows * cols];
 
 		for (int y = 0; y < rows; y++) {
 			for (int x = 0; x < cols; x++) {
-				calculatePointGradientValue(rows, cols, gradients, sum, weightArray, y, x);
+				calculatePointGradientValue(rows, cols, gradients, sum, y, x);
 			}
 		}
 
@@ -70,48 +69,47 @@ public class EyeService {
 	}
 
 	private static void calculatePointGradientValue(int rows, int cols, GradientsModel gradients, double[] sum,
-			double[] weightArray, int y, int x) {
+			int y, int x) {
 		int coordinate = (y * cols) + x;
 
 		double valueX = gradients.gradientX[coordinate];
 		double valueY = gradients.gradientY[coordinate];
-		if (valueX == 0.0 && valueY == 0.0) {
+		
+		// cut gradients that cannot be a possible center of a circle gradient
+		if (valueX == 0.0 || valueY == 0.0) {
 			return;
 		}
+		
+		// boost sum values by the distance of other points and its value
 		for (int cy = 0; cy < rows; cy++) {
 			for (int cx = 0; cx < cols; cx++) {
-				doSumPoints(rows, cols, sum, weightArray, y, x, coordinate, valueX, valueY, cx, cy);
+				doSumPoints(rows, cols, sum, y, x, coordinate, valueX, valueY, cx, cy);
 			}
 		}
 	}
 
-	private static void doSumPoints(int rows, int cols, double[] sum, double[] weightArray, int y, int x,
+	private static void doSumPoints(int rows, int cols, double[] sum, int y, int x,
 			int coordinate, double valueX, double valueY, int cx, int cy) {
 
 		int coordinateC = (cy * cols) + cx;
-		// check all other than the current value
+		
+		// ignore of the two coordinates are the same
 		if (x == cx && y == cy) {
 			return;
 		}
 
-		double dx = x - cx; // the distance to a certain point
-		double dy = y - cy; // the distance to a certain point
-		double magnitude = Math.sqrt((dx * dx) + (dy * dy)); // actual vector distance
-
+		// calculate the distance to the selected point
+		double dx = x - cx;
+		double dy = y - cy;
+		
+		// actual vector size
+		double magnitude = Math.sqrt((dx * dx) + (dy * dy)); 
+		
+		// calculating the dot product
 		dx = dx / magnitude;
 		dy = dy / magnitude;
-
-		// 0 or positive
 		double dotProduct = Math.max(0, dx * valueX + dy * valueY);
-
-		double currentValue = sum[coordinateC];
-
-		if (Constants.enableWeight) {
-			double weightValue = 255 - weightArray[coordinate];
-			sum[coordinateC] = currentValue + (Math.pow(dotProduct, 2) * (weightValue / Constants.weightDivisor));
-		} else {
-			sum[coordinateC] = currentValue + Math.pow(dotProduct, 2);
-		}
+		sum[coordinateC] += Math.pow(dotProduct, 2);
 	}
 
 	private static Mat floodKillEdges(Mat matrix) {
