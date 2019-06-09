@@ -29,16 +29,19 @@ public class EyeService {
 		Mat sizedImage = resizeImage(eyeRegionSubframe, rows, cols);
 		double[] frameAsDoubles = Helpers.matrixToArray(sizedImage);
 
+		// compute X and Y gradients
 		GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
 
+		// sum up both gradients and increase value
+		// if for being at even distances from other points
 		double[] sum = new double[rows * cols];
-
 		for (int y = 0; y < rows; y++) {
 			for (int x = 0; x < cols; x++) {
 				calculatePointGradientValue(rows, cols, gradients, sum, y, x);
 			}
 		}
 
+		// get the maximum value from the gradients sum
 		Mat out = Helpers.arrayToMatrix(sum, rows, cols, CV_32F);
 		Point maxLocation = new Point();
 		DoublePointer maxValue = new DoublePointer();
@@ -47,14 +50,24 @@ public class EyeService {
 		if (Constants.enablePostProcessing) {
 			Mat floodClone = new Mat(rows, cols, CV_32F);
 			int coordinate = (maxLocation.y() * cols) + maxLocation.x();
+			
+			// set a percent of the current maximum as a minimum treshold
+			// with tresh to zero any values below the treshold will be set to zero
+			// other values will stay as they are
 			double floodThresh = sum[coordinate] * Constants.postProcessingTreshold;
 			threshold(out, floodClone, floodThresh, 0.0, THRESH_TOZERO);
+			
+			// set any values at the edges of the image to 0 
+			// we already know they are not a possible center
 			Mat mask = floodKillEdges(floodClone);
 
+			// use the mask with the zeroed out edges and treshold values
+			// and test again for the maximum value
 			minMaxLoc(out, (DoublePointer) null, (DoublePointer) null, (Point) null, maxLocation, mask);
 			return maxLocation;
 		}
 
+		// cleanup
 		eyeRegionSubframe.release();
 		sizedImage.release();
 
@@ -109,6 +122,8 @@ public class EyeService {
 		dx = dx / magnitude;
 		dy = dy / magnitude;
 		double dotProduct = Math.max(0, dx * valueX + dy * valueY);
+		
+		// sum up the dot product with the previous dot products for the current points
 		sum[coordinateC] += Math.pow(dotProduct, 2);
 	}
 
