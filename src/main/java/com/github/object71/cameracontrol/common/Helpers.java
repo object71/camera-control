@@ -163,6 +163,7 @@ public class Helpers {
 				double magnitudeValue = magnitude[coordinate];
 				if (magnitudeValue > gradientTreshold) {
 					// recalculate gradients based on the magnitude matrix
+					// values are between 0 and 1 after this
 					gradientX[coordinate] = valueX / magnitudeValue;
 					gradientY[coordinate] = valueY / magnitudeValue;
 				} else {
