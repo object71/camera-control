@@ -64,6 +64,9 @@ public class Helpers {
 		try (DoubleIndexer inputMatrixIndexer = inputMatrix.createIndexer()) {
 			inputMatrixIndexer.put(0, 0, matrix);
 
+			// calculating the standard deviation and mean deviation
+			// standard deviation is the deviation peresented with negative values also
+			// mean deviation (absolute deviation) is the deviation presented by only absolute values
 			Mat standartMagnitudeGradient = new Mat();
 			Mat meanMagnitudeGradient = new Mat();
 			meanStdDev(inputMatrix, meanMagnitudeGradient, standartMagnitudeGradient);
@@ -130,6 +133,7 @@ public class Helpers {
 		double[] magnitude = new double[rows * cols];
 		double xA, xB, yA, yB, valueX, valueY;
 
+		// compute the gradients for each pixel and also the gradient magnitude
 		for (int y = 0; y < rows; y++) {
 			for (int x = 1; x < cols; x++) {
 				int coordinate = (y * cols) + x;
@@ -146,6 +150,9 @@ public class Helpers {
 			}
 		}
 
+		// could be a static treshold but here its used 
+		// the standard deviation and only values that are above
+		// will be processed further
 		double gradientTreshold = Helpers.computeDynamicTreshold(magnitude, Constants.gradientTreshold, rows, cols);
 
 		for (int y = 0; y < rows; y++) {
@@ -155,9 +162,11 @@ public class Helpers {
 				valueY = gradientY[coordinate];
 				double magnitudeValue = magnitude[coordinate];
 				if (magnitudeValue > gradientTreshold) {
+					// recalculate gradients based on the magnitude matrix
 					gradientX[coordinate] = valueX / magnitudeValue;
 					gradientY[coordinate] = valueY / magnitudeValue;
 				} else {
+					// zero out values below the treshold
 					gradientX[coordinate] = 0;
 					gradientY[coordinate] = 0;
 				}
