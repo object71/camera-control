@@ -89,7 +89,7 @@ public class EyeService {
 		double valueY = gradients.gradientY[coordinate];
 		
 		// cut gradients that cannot be a possible center of a circle gradient
-		if (valueX == 0.0 || valueY == 0.0) {
+		if (valueX == 0.0 && valueY == 0.0) {
 			return;
 		}
 		
