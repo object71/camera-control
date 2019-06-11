@@ -171,7 +171,7 @@ public class FaceService implements Runnable {
 			return;
 		}
 
-		Rect faceLocation = locateFace(inputFrame, frame);
+		Rect faceLocation = locateFace(frame);
 
 		if (faceLocation == null) {
 			breakProcessCleanup(inputFrame);
@@ -205,7 +205,7 @@ public class FaceService implements Runnable {
 		inputFrame.release();
 	}
 
-	private Rect locateFace(Mat inputFrame, Mat frame) {
+	private Rect locateFace(Mat frame) {
 		Rect faceLocation = null;
 		if (faceTracker == null) {
 			faceLocation = this.getFaceLocation(frame);
@@ -216,9 +216,9 @@ public class FaceService implements Runnable {
 			trackedFace = Helpers.RectToRect2d(faceLocation);
 
 			faceTracker = TrackerBoosting.create();
-			faceTracker.init(inputFrame, trackedFace);
+			faceTracker.init(frame, trackedFace);
 		} else {
-			if (faceTracker.update(inputFrame, trackedFace)) {
+			if (faceTracker.update(frame, trackedFace)) {
 				faceLocation = Helpers.Rect2dToRect(trackedFace);
 			} else {
 				faceLocation = this.getFaceLocation(frame);
@@ -227,7 +227,7 @@ public class FaceService implements Runnable {
 				}
 
 				trackedFace = Helpers.RectToRect2d(faceLocation);
-				faceTracker.init(inputFrame, trackedFace);
+				faceTracker.init(frame, trackedFace);
 			}
 		}
 		return faceLocation;
