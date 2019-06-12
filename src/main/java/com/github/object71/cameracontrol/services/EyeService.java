@@ -9,6 +9,7 @@ import com.github.object71.cameracontrol.common.Helpers;
 
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.opencv_core.Mat;
+import org.bytedeco.javacpp.opencv_core.Point;
 import org.bytedeco.javacpp.opencv_core.Size;
 import org.bytedeco.javacpp.indexer.Indexer;
 
@@ -26,28 +27,38 @@ public class EyeService {
 		int rows = 80;
 		int cols = 80;
 
+		long start = System.nanoTime();
 		Mat sizedImage = resizeImage(eyeRegionSubframe, rows, cols);
+		System.out.println("\t\tresizeImage: " + (System.nanoTime() - start) + "nS");
+		
+		start = System.nanoTime();
 		double[] frameAsDoubles = Helpers.matrixToArray(sizedImage);
 
 		// compute X and Y gradients
 		GradientsModel gradients = Helpers.computeGradient(frameAsDoubles, rows, cols);
-
+		System.out.println("\t\tHelpers.computeGradient: " + (System.nanoTime() - start) + "nS");
+		
 		// sum up both gradients and increase value
 		// if for being at even distances from other points
+		start = System.nanoTime();
 		double[] sum = new double[rows * cols];
 		for (int y = 0; y < rows; y++) {
 			for (int x = 0; x < cols; x++) {
 				calculatePointGradientValue(rows, cols, gradients, sum, y, x);
 			}
 		}
+		System.out.println("\t\tcalculatePointGradientValue: " + (System.nanoTime() - start) + "nS");
 
 		// get the maximum value from the gradients sum
+		start = System.nanoTime();
 		Mat out = Helpers.arrayToMatrix(sum, rows, cols, CV_32F);
 		Point maxLocation = new Point();
 		DoublePointer maxValue = new DoublePointer();
 		minMaxLoc(out, (DoublePointer) null, maxValue, (Point) null, maxLocation, (Mat) null);
+		System.out.println("\t\tmaxLocation: " + (System.nanoTime() - start) + "nS");
 
 		if (Constants.enablePostProcessing) {
+		    start = System.nanoTime();
 			Mat floodClone = new Mat(rows, cols, CV_32F);
 			int coordinate = (maxLocation.y() * cols) + maxLocation.x();
 			
@@ -64,6 +75,7 @@ public class EyeService {
 			// use the mask with the zeroed out edges and treshold values
 			// and test again for the maximum value
 			minMaxLoc(out, (DoublePointer) null, (DoublePointer) null, (Point) null, maxLocation, mask);
+			System.out.println("\t\tpostProcessing: " + (System.nanoTime() - start) + "nS");
 			return maxLocation;
 		}
 
@@ -96,16 +108,22 @@ public class EyeService {
 		// boost sum values by the distance of other points and its value
 		for (int cy = 0; cy < rows; cy++) {
 			for (int cx = 0; cx < cols; cx++) {
-				doSumPoints(rows, cols, sum, y, x, coordinate, valueX, valueY, cx, cy);
+				doSumPoints(rows, cols, sum, y, x, coordinate, valueX, valueY, cx, cy, gradients);
 			}
 		}
 	}
 
 	private static void doSumPoints(int rows, int cols, double[] sum, int y, int x,
-			int coordinate, double valueX, double valueY, int cx, int cy) {
+			int coordinate, double valueX, double valueY, int cx, int cy, GradientsModel gradients) {
 
 		int coordinateC = (cy * cols) + cx;
 		
+		double valueCX = gradients.gradientX[coordinateC];
+        double valueCY = gradients.gradientY[coordinateC];
+        if (valueCX != 0.0 || valueCY != 0.0) {
+            return;
+        }
+        
 		// ignore of the two coordinates are the same
 		if (x == cx && y == cy) {
 			return;
