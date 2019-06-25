@@ -257,16 +257,16 @@ public class Helpers {
 	}
 
 	public static void bright(Mat matrix, double brightenBy) {
-//		for (int y = 0; y < matrix.rows(); y++) {
-//			for (int x = 0; x < matrix.cols(); x++) {
-//				Indexer matrixIndexer = matrix.createIndexer();
-//
-//				for (int v = 0; v < matrixIndexer.channels(); v++) {
-//					double value = matrixIndexer.getDouble((long) y, (long) x, (long) v) + brightenBy;
-//					matrixIndexer.putDouble(new long[] { (long) y, (long) x, (long) v }, value > 255 ? 255 : value);
-//				}
-//			}
-//		}
+		for (int y = 0; y < matrix.rows(); y++) {
+			for (int x = 0; x < matrix.cols(); x++) {
+				Indexer matrixIndexer = matrix.createIndexer();
+
+				for (int v = 0; v < matrixIndexer.channels(); v++) {
+					double value = matrixIndexer.getDouble((long) y, (long) x, (long) v) + brightenBy;
+					matrixIndexer.putDouble(new long[] { (long) y, (long) x, (long) v }, value > 255 ? 255 : value);
+				}
+			}
+		}
 	}
 
 	public static void possibleCenterFormula(int x, int y, Mat weight, double gx, double gy, Mat output) {

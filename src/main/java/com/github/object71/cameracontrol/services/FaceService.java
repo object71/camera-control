@@ -58,21 +58,24 @@ public class FaceService implements Runnable {
     private Tracker faceTracker;
     private Rect2d trackedFace;
 
-    public PointHistoryCollection historyLEP = new PointHistoryCollection(3);
-    public PointHistoryCollection historyREP = new PointHistoryCollection(3);
-
-    public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(2);
-    public double coordinateSystemSide = 80;
+    public PointHistoryCollection eyeGazeCoordinate = new PointHistoryCollection(3);
+    public int coordinateSystemWidth = 80;
+    public int coordinateSystemHeight = 60;
 
     public Thread currentThread;
     public boolean process;
     public boolean calibrateOnMouseClick;
     public boolean controlMouse;
     public boolean closing = false;
+    public boolean isAnchorEnabled = true;
+    public int anchorWidth = 3;
+    public int anchorHeight = 3;
+    public int cameraWidth = 640;
+    public int cameraHeight = 480;
 
-    public double leftBound = coordinateSystemSide;
+    public double leftBound = coordinateSystemWidth;
     public double rightBound = 0;
-    public double topBound = coordinateSystemSide;
+    public double topBound = coordinateSystemHeight;
     public double bottomBound = 0;
 
     private ArrayList<ImageProcessedListener> imageProcessedListeners = new ArrayList<ImageProcessedListener>();
@@ -223,8 +226,7 @@ public class FaceService implements Runnable {
     }
 
     private void breakProcessCleanup(Mat inputFrame) {
-        historyLEP.insertNewPoint(null);
-        historyREP.insertNewPoint(null);
+        eyeGazeCoordinate.insertNewPoint(null);
         eyeGazeCoordinate.insertNewPoint(null);
 
         inputFrame.release();
@@ -280,7 +282,6 @@ public class FaceService implements Runnable {
         processBlinks(leftEye.getIsBlinking(), rightEye.getIsBlinking());
         System.out.println("\tprocessBlinks: " + (System.nanoTime() - start) + "nS");
 
-        this.recalculateCoordinates();
     }
 
     private void registerEyeCenters(Mat frame, EyeModel leftEye, EyeModel rightEye) {
@@ -288,22 +289,19 @@ public class FaceService implements Runnable {
             Rect leftEyeBall = new Rect((int) leftEye.leftCorner.x(), (int) leftEye.topCorner.y(),
                     (int) leftEye.getCornersDistance(), (int) leftEye.getLidsDistance());
             long start = System.nanoTime();
-            Point leftEyeResult = EyeService.getEyeCenter(frame.apply(leftEyeBall));
+            Point leftEyeResult = EyeService.getEyeCenter(frame.apply(leftEyeBall), coordinateSystemWidth, coordinateSystemHeight);
             System.out.println("\t\tEyeService.getEyeCenter: " + (System.nanoTime() - start) + "nS");
-            this.historyLEP.insertNewPoint(leftEyeResult);
-            this.historyREP.insertNewPoint(leftEyeResult);
+            this.eyeGazeCoordinate.insertNewPoint(leftEyeResult);
             
         } else if(!rightEye.getIsBlinking()) {
             Rect rightEyeBall = new Rect((int) rightEye.leftCorner.x(), (int) rightEye.topCorner.y(),
                     (int) rightEye.getCornersDistance(), (int) rightEye.getLidsDistance());
             long start = System.nanoTime();
-            Point rightEyeResult = EyeService.getEyeCenter(frame.apply(rightEyeBall));
+            Point rightEyeResult = EyeService.getEyeCenter(frame.apply(rightEyeBall), coordinateSystemWidth, coordinateSystemHeight);
             System.out.println("\t\tEyeService.getEyeCenter: " + (System.nanoTime() - start) + "nS");
-            this.historyLEP.insertNewPoint(rightEyeResult);
-            this.historyREP.insertNewPoint(rightEyeResult);
+            this.eyeGazeCoordinate.insertNewPoint(rightEyeResult);
         } else {
-            this.historyLEP.insertNewPoint(null);
-            this.historyREP.insertNewPoint(null);
+            this.eyeGazeCoordinate.insertNewPoint(null);
         }
     }
 
@@ -377,11 +375,6 @@ public class FaceService implements Runnable {
         }
 
         return faceLocation;
-    }
-
-    public void recalculateCoordinates() {
-        eyeGazeCoordinate.insertNewPoint(
-                Helpers.centerOfPoints(this.historyLEP.getAveragePoint(), this.historyREP.getAveragePoint()));
     }
 
     @Override
@@ -481,7 +474,7 @@ public class FaceService implements Runnable {
     private Mat commonFrameRefactor(Mat frame, int frameWidth, int frameHeight) {
         Helpers.bright(frame, brightnessValue);
 
-        Size size = new Size(320, 240);
+        Size size = new Size(this.cameraWidth, this.cameraHeight);
         if (frameWidth > size.width()) {
             int x = (int) (frameWidth - size.width()) / 2;
             int y = (int) (frameHeight - size.height()) / 2;
@@ -524,6 +517,10 @@ public class FaceService implements Runnable {
     }
 
     private Point validateBounds(double screenWidth, double screenHeight, double kX, double kY, Point coord) {
+        if(!this.isAnchorEnabled) {
+            return coord;
+        }
+        
         Point anchored = new Point();
 
         if (coord.x() > leftBound && coord.x() < rightBound && coord.y() > topBound && coord.y() < bottomBound) {
@@ -539,7 +536,7 @@ public class FaceService implements Runnable {
             anchored.y((int) ((bottomBound - topBound) / kY) - 1);
         }
 
-        anchored = anchorOnRect(screenWidth, screenHeight, anchored.x(), anchored.y(), 3, 3);
+        anchored = anchorOnRect(screenWidth, screenHeight, anchored.x(), anchored.y(), anchorWidth, anchorHeight);
         return anchored;
     }
 

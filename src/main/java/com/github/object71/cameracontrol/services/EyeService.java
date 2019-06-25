@@ -18,14 +18,14 @@ import static org.bytedeco.javacpp.opencv_core.*;
 
 public class EyeService {
 
-	public static Point getEyeCenter(Mat eyeRegionSubframe) {
+	public static Point getEyeCenter(Mat eyeRegionSubframe, int widthResize, int heightResize) {
 		
 		if (eyeRegionSubframe.rows() < 3 || eyeRegionSubframe.cols() < 3) {
 			return null;
 		}
 		
-		int rows = 80;
-		int cols = 80;
+		int rows = heightResize;
+		int cols = widthResize;
 
 		long start = System.nanoTime();
 		Mat sizedImage = resizeImage(eyeRegionSubframe, rows, cols);
